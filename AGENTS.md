@@ -239,6 +239,25 @@ config = json.loads(response['Parameter']['Value'])
 | Claude Code | 架構、複雜邏輯 | handlers、orchestrator |
 | Gemini CLI | 文件、測試 | tests、docs、review |
 
+### TDD 開發流程 (TDD Development Workflow)
+
+為了確保程式碼品質與開發者對需求的理解，Milestone 1.1 的所有核心程式碼開發任務都應遵循 TDD 流程。
+
+1.  **Red (寫一個失敗的測試):**
+    -   針對一個具體的功能需求，先在 `tests/` 目錄下撰寫一個對應的單元測試。
+    -   這個測試應該會因為功能尚未實作而失敗。
+    -   **指令範例:** `pytest tests/test_core_config.py::test_load_config_from_ssm`
+
+2.  **Green (寫最少的程式碼讓測試通過):**
+    -   在 `src/` 目錄下撰寫最精簡的程式碼，剛好能讓前一步的測試通過即可。
+    -   此階段不追求完美的程式碼結構或效能。
+
+3.  **Refactor (重構程式碼):**
+    -   在測試持續通過的前提下，重構 `src/` 中的程式碼，改善可讀性、結構和效率。
+    -   確保程式碼符合 `Code Review Checklist` 的所有要求（如 Type hints、Docstring 等）。
+
+所有 Agent 在執行 P1-02 到 P1-11 的任務時，都必須遵循此流程。
+
 ### 溝通協定
 
 1. **開始任務前：** 更新 Task Registry 為 🔄，登記 File Locks
