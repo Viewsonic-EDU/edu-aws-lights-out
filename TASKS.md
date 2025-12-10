@@ -18,7 +18,10 @@
 | 實作 core/scheduler.py | - | 🔲 | 時區/工作日判斷 |
 | 實作 core/orchestrator.py | - | 🔲 | 執行協調器 |
 | 實作 app.py | - | 🔲 | Lambda handler |
-| 撰寫單元測試 | - | 🔲 | tests/ 目錄，使用 moto |
+| 撰寫單元測試 | Gemini CLI | 🔄 | tests/ 目錄，使用 moto。已完成 tests/unit/test_utils_logger.py 的撰寫。 |
+| 2025-12-09 | 專案規劃與文件建立 | Claude | CLAUDE.md, AGENTS.md, 部署指南等 |
+| 2025-12-10 | 建立架構流程圖 | Gemini CLI | docs/diagram.md |
+| 2025-12-10 | 新增 TDD 開發規範 | Gemini CLI | 更新 AGENTS.md |
 
 ### Milestone 1.2: AWS 設定
 
