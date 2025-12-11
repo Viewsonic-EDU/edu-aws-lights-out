@@ -92,10 +92,10 @@ open htmlcov/index.html  # 開啟報告
 
 ```bash
 # 檢查整個專案
-mypy src/lambda
+mypy src/lambda_function
 
 # 檢查特定檔案
-mypy src/lambda/utils/logger.py
+mypy src/lambda_function/utils/logger.py
 ```
 
 ---
@@ -104,7 +104,7 @@ mypy src/lambda/utils/logger.py
 
 ```
 aws-lights-out-plan/
-├── src/lambda/              # Lambda 程式碼（部署包）
+├── src/lambda_function/     # Lambda 程式碼（部署包）
 │   ├── app.py               # Lambda 進入點
 │   ├── core/                # 核心業務邏輯
 │   │   ├── config.py        # SSM 配置載入
@@ -184,7 +184,7 @@ DRY_RUN=true python -m src.lambda.app start
 
 ```bash
 # 建立部署包
-cd src/lambda
+cd src/lambda_function
 zip -r ../../function.zip . -x "*.pyc" "__pycache__/*" "*.md"
 cd ../..
 

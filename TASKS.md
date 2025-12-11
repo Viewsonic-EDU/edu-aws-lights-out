@@ -8,7 +8,7 @@
 
 | Task | Owner | Status | Notes |
 |------|-------|--------|-------|
-| 建立專案結構 | - | 🔲 | src/lambda/ 目錄與 __init__.py |
+| 建立專案結構 | - | 🔲 | src/lambda_function/ 目錄與 __init__.py |
 | 實作 utils/logger.py | - | 🔲 | 結構化 JSON logging |
 | 實作 core/config.py | - | 🔲 | SSM 配置載入與驗證 |
 | 實作 discovery/base.py | - | 🔲 | DiscoveredResource 與 ResourceDiscovery 介面 |

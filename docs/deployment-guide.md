@@ -9,7 +9,7 @@
 - AWS CLI 已設定 (`aws configure`)
 - 有權限建立 Lambda、IAM Role、SSM Parameter
 - Workshop 環境的 ECS Service 還在運作
-- Phase 1 程式碼已完成（src/lambda/ 目錄）
+- Phase 1 程式碼已完成（src/lambda_function/ 目錄）
 
 ### Step 1: 建立 IAM Role
 
@@ -106,7 +106,7 @@
 ### Step 4: 打包 Lambda
 
 ```bash
-cd src/lambda
+cd src/lambda_function
 zip -r ../../function.zip . -x "*.pyc" -x "__pycache__/*" -x "*.pytest_cache/*"
 cd ../..
 ```

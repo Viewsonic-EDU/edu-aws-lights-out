@@ -38,7 +38,7 @@
 
 | ID | Task | Status | Agent | Notes |
 |----|------|--------|-------|-------|
-| P1-01 | 專案結構設計 | 🔲 | - | 建立 src/lambda/ 目錄結構 |
+| P1-01 | 專案結構設計 | 🔲 | - | 建立 src/lambda_function/ 目錄結構 |
 | P1-02 | utils/logger.py | 🔲 | - | 結構化 JSON logging |
 | P1-03 | core/config.py | 🔲 | - | SSM Parameter Store 載入 |
 | P1-04 | discovery/base.py | 🔲 | - | 資源發現介面定義 |

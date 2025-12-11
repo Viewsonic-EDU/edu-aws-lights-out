@@ -14,7 +14,7 @@
 ## Architecture
 
 ```
-src/lambda/
+src/lambda_function/
 ├── app.py              # Lambda 進入點
 ├── core/
 │   ├── config.py       # SSM 配置載入
@@ -71,7 +71,7 @@ pytest tests/ -v
 pytest tests/unit/core/test_config.py -v
 
 # 打包
-cd src/lambda && zip -r ../../function.zip . -x "*.pyc" "__pycache__/*"
+cd src/lambda_function && zip -r ../../function.zip . -x "*.pyc" "__pycache__/*"
 
 # 手動觸發
 aws lambda invoke --function-name lights-out --payload '{"action":"status"}' out.json
