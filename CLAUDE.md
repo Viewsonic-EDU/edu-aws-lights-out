@@ -14,7 +14,7 @@
 ## Architecture
 
 ```
-src/lambda/
+src/lambda_function/
 ├── app.py              # Lambda 進入點
 ├── core/
 │   ├── config.py       # SSM 配置載入
@@ -51,14 +51,27 @@ lights-out:priority = 100    # 小=先啟動/後關閉
 - type: `feat|fix|docs|refactor|test`
 - scope: `core|discovery|handlers|config`
 
+## AI Agent Rules
+
+**CRITICAL - DO NOT AUTO-EXECUTE:**
+- ❌ **NEVER** 自動執行 `pytest` 或任何測試指令
+- ❌ **NEVER** 自動執行 `python app.py` 或主程式
+- ❌ **NEVER** 自動執行 `aws lambda invoke`
+- ✅ **ALWAYS** 僅提供指令，由開發者在已啟動虛擬環境的終端中執行
+
+**Why:** 開發者使用獨立虛擬環境管理依賴，AI Agent 執行會因環境不一致而失敗。
+
 ## Quick Commands
 
 ```bash
-# 本地測試
-python -m pytest tests/ -v
+# 本地測試（需在虛擬環境中執行）
+pytest tests/ -v
+
+# 單一模組測試
+pytest tests/unit/core/test_config.py -v
 
 # 打包
-cd src/lambda && zip -r ../../function.zip . -x "*.pyc" "__pycache__/*"
+cd src/lambda_function && zip -r ../../function.zip . -x "*.pyc" "__pycache__/*"
 
 # 手動觸發
 aws lambda invoke --function-name lights-out --payload '{"action":"status"}' out.json

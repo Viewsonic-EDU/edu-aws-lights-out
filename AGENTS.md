@@ -38,7 +38,7 @@
 
 | ID | Task | Status | Agent | Notes |
 |----|------|--------|-------|-------|
-| P1-01 | 專案結構設計 | 🔲 | - | 建立 src/lambda/ 目錄結構 |
+| P1-01 | 專案結構設計 | 🔲 | - | 建立 src/lambda_function/ 目錄結構 |
 | P1-02 | utils/logger.py | 🔲 | - | 結構化 JSON logging |
 | P1-03 | core/config.py | 🔲 | - | SSM Parameter Store 載入 |
 | P1-04 | discovery/base.py | 🔲 | - | 資源發現介面定義 |
@@ -258,12 +258,38 @@ config = json.loads(response['Parameter']['Value'])
 
 所有 Agent 在執行 P1-02 到 P1-11 的任務時，都必須遵循此流程。
 
+### 執行策略 (Execution Policy)
+
+**⚠️ CRITICAL: 測試與程式執行規則**
+
+AI Agents **必須遵守** 以下執行限制：
+
+1. **禁止自動執行測試:**
+   - ❌ 不可自動執行 `pytest`、`python -m pytest` 等測試指令
+   - ✅ 應提供測試指令，讓開發者在虛擬環境中執行
+
+2. **禁止自動執行主程式:**
+   - ❌ 不可自動執行 `python app.py`、`aws lambda invoke` 等主程式
+   - ✅ 應提供執行指令，說明參數與預期結果
+
+3. **環境說明:**
+   - 開發者使用獨立虛擬環境（venv）管理 Python 依賴
+   - AI Agent 在不同 shell context 執行會導致 `ModuleNotFoundError`
+   - 測試與執行需由開發者在已啟動虛擬環境的終端中進行
+
+**允許的操作:**
+- ✅ 檔案讀寫、搜尋、編輯
+- ✅ 靜態程式碼分析（Grep、Glob）
+- ✅ Git 操作（status、diff、commit）
+- ✅ 文件生成與更新
+
 ### 溝通協定
 
 1. **開始任務前：** 更新 Task Registry 為 🔄，登記 File Locks
 2. **完成任務後：** 更新為 ✅，清除 File Locks，記錄 Notes
 3. **遇到阻礙時：** 記錄到 Blockers，狀態改為 ⏸️
 4. **重要決策時：** 記錄到 Active Decisions
+5. **需要測試時：** 提供完整測試指令，等待開發者回報結果
 
 ### Code Review Checklist
 - [ ] Type hints 完整
