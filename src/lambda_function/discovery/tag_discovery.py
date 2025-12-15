@@ -1,11 +1,11 @@
 import boto3
-import logging
 from typing import List, Dict, Tuple, Any
 
 from src.lambda_function.discovery.base import DiscoveredResource, ResourceDiscovery
+from src.lambda_function.utils.logger import setup_logger
 
-# Assume logger is configured elsewhere, get it by name
-logger = logging.getLogger(__name__)
+# Setup module logger with structured JSON output
+logger = setup_logger(__name__)
 
 class TagDiscovery(ResourceDiscovery):
     """
