@@ -12,6 +12,10 @@ class TagDiscovery(ResourceDiscovery):
     Discovers resources based on AWS resource tags.
     """
 
+    # Constants for default values
+    DEFAULT_PRIORITY = 50
+    DEFAULT_GROUP = 'default'
+
     def __init__(self, tag_filters: Dict[str, str], resource_types: List[str]):
         """
         Initializes the TagDiscovery strategy.
@@ -30,11 +34,14 @@ class TagDiscovery(ResourceDiscovery):
         """
         Finds all resources matching the configured tags and resource types.
         Handles pagination from the get_resources API.
+
+        Returns:
+            List of discovered resources with parsed metadata
         """
         discovered_resources = []
-        tag_filters_list = [{"Key": k, "Values": [v]} for k, v in self.tag_filters.items()]
+        tag_filters_list = self._build_tag_filters(self.tag_filters)
 
-        # Manual pagination handling to match test expectations
+        # Manual pagination handling
         pagination_token = ''
         while True:
             # Build request parameters
@@ -45,46 +52,13 @@ class TagDiscovery(ResourceDiscovery):
             if pagination_token:
                 params['PaginationToken'] = pagination_token
 
-            # Fetch resources
+            # Fetch resources from AWS
             response = self.rg_tag_client.get_resources(**params)
 
             # Process each resource in the response
             for resource_map in response.get('ResourceTagMappingList', []):
-                tags = {tag['Key']: tag['Value'] for tag in resource_map.get('Tags', [])}
-
-                # Extract priority with fallback to default
-                try:
-                    priority_str = tags.get('lights-out:priority', '50')
-                    priority = int(priority_str)
-                except (ValueError, TypeError):
-                    logger.warning(
-                        f"Invalid priority '{priority_str}' on resource "
-                        f"{resource_map['ResourceARN']}. Falling back to default 50."
-                    )
-                    priority = 50
-
-                group = tags.get('lights-out:group', 'default')
-                arn = resource_map['ResourceARN']
-
-                # Extract resource type from ARN (format: arn:aws:service:region:account:resource-type/...)
-                aws_resource_type = self._extract_resource_type_from_arn(arn)
-
-                resource_id, metadata = self._parse_resource_id_and_metadata(arn, aws_resource_type)
-
-                # The internal resource_type is simplified (e.g., 'ecs-service')
-                internal_resource_type = aws_resource_type.replace(':', '-')
-
-                discovered_resources.append(
-                    DiscoveredResource(
-                        resource_type=internal_resource_type,
-                        arn=arn,
-                        resource_id=resource_id,
-                        priority=priority,
-                        group=group,
-                        tags=tags,
-                        metadata=metadata
-                    )
-                )
+                discovered_resource = self._process_resource_mapping(resource_map)
+                discovered_resources.append(discovered_resource)
 
             # Check for more pages
             pagination_token = response.get('PaginationToken', '')
@@ -92,6 +66,73 @@ class TagDiscovery(ResourceDiscovery):
                 break
 
         return discovered_resources
+
+    def _process_resource_mapping(self, resource_map: Dict[str, Any]) -> DiscoveredResource:
+        """
+        Processes a single resource mapping from AWS API response.
+
+        Args:
+            resource_map: Resource mapping object from get_resources API
+
+        Returns:
+            DiscoveredResource object with parsed information
+        """
+        # Extract and transform tags
+        tags = {tag['Key']: tag['Value'] for tag in resource_map.get('Tags', [])}
+        arn = resource_map['ResourceARN']
+
+        # Extract lights-out specific metadata
+        priority = self._extract_priority_from_tags(tags, arn)
+        group = tags.get('lights-out:group', self.DEFAULT_GROUP)
+
+        # Parse ARN to get resource type and ID
+        aws_resource_type = self._extract_resource_type_from_arn(arn)
+        resource_id, metadata = self._parse_resource_id_and_metadata(arn, aws_resource_type)
+        internal_resource_type = aws_resource_type.replace(':', '-')
+
+        return DiscoveredResource(
+            resource_type=internal_resource_type,
+            arn=arn,
+            resource_id=resource_id,
+            priority=priority,
+            group=group,
+            tags=tags,
+            metadata=metadata
+        )
+
+    def _extract_priority_from_tags(self, tags: Dict[str, str], arn: str) -> int:
+        """
+        Extracts and validates priority from resource tags.
+
+        Args:
+            tags: Dictionary of resource tags
+            arn: Resource ARN for logging purposes
+
+        Returns:
+            Valid priority as integer, or DEFAULT_PRIORITY if invalid
+        """
+        priority_str = tags.get('lights-out:priority', str(self.DEFAULT_PRIORITY))
+        try:
+            return int(priority_str)
+        except (ValueError, TypeError):
+            logger.warning(
+                f"Invalid priority '{priority_str}' on resource {arn}. "
+                f"Falling back to default {self.DEFAULT_PRIORITY}."
+            )
+            return self.DEFAULT_PRIORITY
+
+    @staticmethod
+    def _build_tag_filters(tag_filters: Dict[str, str]) -> List[Dict[str, Any]]:
+        """
+        Converts tag filters dictionary to AWS API format.
+
+        Args:
+            tag_filters: Dictionary of tag key-value pairs
+
+        Returns:
+            List of tag filter objects for AWS API
+        """
+        return [{"Key": k, "Values": [v]} for k, v in tag_filters.items()]
 
     @staticmethod
     def _extract_resource_type_from_arn(arn: str) -> str:
