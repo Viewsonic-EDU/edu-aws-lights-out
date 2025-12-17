@@ -208,9 +208,12 @@ def test_orchestrator_handles_handler_error_gracefully(
     assert result["failed"] == 1
 
     # Verify error is captured in results
+    # Handler catches exception and returns HandlerResult(success=False) (see ecs_service.py:182-198)
     handler_result = result["results"][0]
-    assert handler_result["success"] is False
-    assert "error" in handler_result
+    assert isinstance(handler_result, HandlerResult)
+    assert handler_result.success is False
+    assert handler_result.error is not None
+    assert "AWS API Error" in handler_result.error
 
 
 @patch('src.lambda_function.core.orchestrator.get_schedule')
