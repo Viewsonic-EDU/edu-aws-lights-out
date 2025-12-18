@@ -1,0 +1,45 @@
+service: lights-out-ts
+
+provider:
+  name: aws
+  region: ap-southeast-1
+  stage: ${opt:stage, 'poc'}
+
+  iam:
+    role:
+      statements:
+        - Effect: Allow
+          Action: [ssm:GetParameter]
+          Resource: arn:aws:ssm:${aws:region}:${aws:accountId}:parameter/lights-out/*
+        - Effect: Allow
+          Action: [tag:GetResources]
+          Resource: "*"
+        - Effect: Allow
+          Action: [ecs:DescribeServices, ecs:UpdateService]
+          Resource: "*"
+
+  environment:
+    CONFIG_PARAMETER_NAME: /lights-out/${self:provider.stage}/config
+    LOG_LEVEL: ${opt:loglevel, 'INFO'}
+
+functions:
+  lights-out:
+    handler: dist/index.handler
+    runtime: nodejs20.x
+    timeout: 300
+    memorySize: 512
+    tags:
+      runtime: typescript
+      version: poc
+
+custom:
+  esbuild:
+    bundle: true
+    minify: true
+    sourcemap: true
+    exclude: ["aws-sdk"]
+    target: node20
+    platform: node
+
+plugins:
+  - serverless-esbuild
