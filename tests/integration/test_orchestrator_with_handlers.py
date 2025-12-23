@@ -77,13 +77,11 @@ def test_handler_registry_contains_ecs_service():
     assert HANDLER_REGISTRY["ecs-service"].__name__ == "ECSServiceHandler"
 
 
-@patch('src.lambda_function.core.orchestrator.get_schedule')
 @patch.object(Orchestrator, 'discover_resources')
 @patch('src.lambda_function.handlers.ecs_service.boto3')
 def test_orchestrator_calls_ecs_handler_stop(
     mock_boto3,
     mock_discover_resources,
-    mock_get_schedule,
     mock_ecs_resource,
     mock_config
 ):
@@ -92,7 +90,6 @@ def test_orchestrator_calls_ecs_handler_stop(
     """
     # Arrange
     mock_discover_resources.return_value = [mock_ecs_resource]
-    mock_get_schedule.return_value = "office-hours"
 
     # Mock ECS client
     mock_ecs_client = MagicMock()
@@ -126,13 +123,11 @@ def test_orchestrator_calls_ecs_handler_stop(
     assert handler_result.resource_type == "ecs-service"
 
 
-@patch('src.lambda_function.core.orchestrator.get_schedule')
 @patch.object(Orchestrator, 'discover_resources')
 @patch('src.lambda_function.handlers.ecs_service.boto3')
 def test_orchestrator_calls_ecs_handler_start(
     mock_boto3,
     mock_discover_resources,
-    mock_get_schedule,
     mock_ecs_resource,
     mock_config
 ):
@@ -141,7 +136,6 @@ def test_orchestrator_calls_ecs_handler_start(
     """
     # Arrange
     mock_discover_resources.return_value = [mock_ecs_resource]
-    mock_get_schedule.return_value = "office-hours"
 
     # Mock ECS client
     mock_ecs_client = MagicMock()
@@ -175,13 +169,11 @@ def test_orchestrator_calls_ecs_handler_start(
     )
 
 
-@patch('src.lambda_function.core.orchestrator.get_schedule')
 @patch.object(Orchestrator, 'discover_resources')
 @patch('src.lambda_function.handlers.ecs_service.boto3')
 def test_orchestrator_handles_handler_error_gracefully(
     mock_boto3,
     mock_discover_resources,
-    mock_get_schedule,
     mock_ecs_resource,
     mock_config
 ):
@@ -190,7 +182,6 @@ def test_orchestrator_handles_handler_error_gracefully(
     """
     # Arrange
     mock_discover_resources.return_value = [mock_ecs_resource]
-    mock_get_schedule.return_value = "office-hours"
 
     # Mock ECS client to raise an error
     mock_ecs_client = MagicMock()
@@ -216,11 +207,9 @@ def test_orchestrator_handles_handler_error_gracefully(
     assert "AWS API Error" in handler_result.error
 
 
-@patch('src.lambda_function.core.orchestrator.get_schedule')
 @patch.object(Orchestrator, 'discover_resources')
 def test_orchestrator_handles_multiple_resources(
     mock_discover_resources,
-    mock_get_schedule,
     mock_config
 ):
     """
@@ -247,7 +236,6 @@ def test_orchestrator_handles_multiple_resources(
     )
 
     mock_discover_resources.return_value = [ecs_resource, unknown_resource]
-    mock_get_schedule.return_value = "office-hours"
 
     orchestrator = Orchestrator(config=mock_config)
 

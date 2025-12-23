@@ -1,5 +1,4 @@
 from typing import List, Dict, Any
-from src.lambda_function.core.scheduler import get_schedule
 from src.lambda_function.discovery.tag_discovery import TagDiscovery
 from src.lambda_function.handlers.factory import get_handler
 from src.lambda_function.utils.logger import setup_logger
@@ -66,7 +65,8 @@ class Orchestrator:
 
         for resource in resources:
             try:
-                schedule = get_schedule(resource, schedule_tag)
+                # Get schedule tag value from resource
+                schedule = resource.tags.get(schedule_tag) if schedule_tag else None
                 if not schedule:
                     self.logger.debug(
                         "No schedule found for resource",
