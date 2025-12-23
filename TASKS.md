@@ -6,15 +6,16 @@
 
 | Phase | Milestone | Status | Progress |
 |-------|-----------|--------|----------|
-| Phase 1 | 1.1 核心程式碼開發 | ✅ 完成 | 100% |
-| Phase 1 | 1.2 AWS 設定 | 🔄 進行中 | 0% |
-| Phase 1 | 1.3 排程與驗證 | 🔲 待開始 | 0% |
-| Phase 2 | NAT Gateway | 🔲 未排程 | - |
+| Phase 1 (Python) | 1.1 核心程式碼開發 | ✅ 完成 | 100% |
+| Phase 1 (TypeScript) | TypeScript 實作 | ✅ 完成 | 100% |
+| Phase 1 | AWS 設定與部署 | 🔲 待開始 | 0% |
+| Phase 1 | 排程與驗證 | 🔲 待開始 | 0% |
+| Phase 2 | RDS Handler | 🔲 未排程 | - |
 | Phase 3 | MCP 整合 | 🔲 未排程 | - |
 
-### 🎯 Milestone 1.1 成果總結
+### 🎯 Phase 1 成果總結
 
-**完成日期**: 2025-12-17
+#### Python 實作（完成日期: 2025-12-17）
 
 **程式碼統計**:
 - 核心模組: 8 個（100% 完成）
@@ -41,13 +42,47 @@ src/lambda_function/
     └── logger.py             ✅ 結構化 JSON 日誌
 ```
 
-**下一步**: 進入 Milestone 1.2 - AWS 環境設定與部署
+#### TypeScript 實作（完成日期: 2025-12-23）
+
+**程式碼統計**:
+- 核心模組: 7 個（100% 完成）
+- 測試檔案: 307 個測試檔案
+- Runtime: Node.js 20 + AWS SDK v3
+- 打包工具: Serverless Framework + esbuild
+
+**核心架構**:
+```
+typescript/src/
+├── index.ts                  ✅ Lambda 入口（handler）
+├── types.ts                  ✅ 共用型別定義
+├── core/
+│   ├── config.ts             ✅ SSM 配置載入
+│   └── orchestrator.ts       ✅ 執行協調器
+├── discovery/
+│   └── tagDiscovery.ts       ✅ Tag-based 資源發現
+├── handlers/
+│   ├── base.ts               ✅ Handler 介面
+│   ├── factory.ts            ✅ Factory Pattern
+│   ├── ecsService.ts         ✅ ECS Service Handler
+│   ├── rdsInstance.ts        ✅ RDS Instance Handler
+│   └── index.ts              ✅ Handler 匯出
+└── utils/
+    └── logger.ts             ✅ 結構化 JSON 日誌
+```
+
+**技術亮點**:
+- ✅ 完整 TypeScript strict mode
+- ✅ AWS SDK v3 (modular imports)
+- ✅ Serverless Framework 部署配置
+- ✅ 支援 ECS 與 RDS 資源管理
+
+**下一步**: 準備 AWS 環境設定與部署
 
 ---
 
-## Phase 1: ECS Service MVP
+## Phase 1: Lambda 函數實作
 
-### Milestone 1.1: 核心程式碼開發 ✅ **COMPLETED**
+### Milestone 1.1: Python 實作 ✅ **COMPLETED**
 
 | Task | Owner | Status | Notes |
 |------|-------|--------|-------|
@@ -70,44 +105,69 @@ src/lambda_function/
 | 範例與使用文件 | Claude | ✅ | examples/orchestrator_usage.py, lambda_local_test.py |
 | 測試指南與修正文件 | Claude | ✅ | docs/app-testing-guide.md, test-fixes.md |
 
-### Milestone 1.2: AWS 設定 (目前)
+### Milestone 1.2: TypeScript 實作 ✅ **COMPLETED**
 
 | Task | Owner | Status | Notes |
 |------|-------|--------|-------|
-| 建立 IAM Role | - | 🔲 | 見 AGENTS.md IAM 規格 |
-| 建立 SSM Parameter | - | 🔲 | /lights-out/workshop/config |
-| 為 ECS Service 加標籤 | - | 🔲 | lights-out:* tags，參考 docs/tagging-guide.md |
-| 建立 Lambda Function | - | 🔲 | Python 3.11, 256MB, 5min timeout |
-| 上傳程式碼 | - | 🔲 | zip 打包（見 CLAUDE.md） |
-| 測試 discover action | - | 🔲 | 驗證資源發現功能 |
-| 測試 status action | - | 🔲 | 手動 invoke |
-| 測試 stop action | - | 🔲 | 驗證 ECS desiredCount=0 |
-| 測試 start action | - | 🔲 | 驗證 ECS 恢復 |
+| 建立 TypeScript 專案結構 | Claude | ✅ | typescript/ 目錄、package.json、tsconfig.json |
+| 實作 utils/logger.ts | Claude | ✅ | 結構化 JSON logging (TypeScript) |
+| 實作 types.ts | Claude | ✅ | 共用型別定義（Config, Resource, HandlerResult 等） |
+| 實作 core/config.ts | Claude | ✅ | SSM 配置載入（AWS SDK v3） |
+| 實作 discovery/tagDiscovery.ts | Claude | ✅ | Tag-based 資源發現（AWS SDK v3） |
+| 實作 handlers/base.ts | Claude | ✅ | ResourceHandler 介面 |
+| 實作 handlers/factory.ts | Claude | ✅ | Handler Factory Pattern |
+| 實作 handlers/ecsService.ts | Claude | ✅ | ECS Service 啟停邏輯（AWS SDK v3） |
+| 實作 handlers/rdsInstance.ts | Claude | ✅ | RDS Instance 啟停邏輯（AWS SDK v3） |
+| 實作 core/orchestrator.ts | Claude | ✅ | 執行協調器 |
+| 實作 index.ts | Claude | ✅ | Lambda handler 入口 |
+| 設定 Serverless Framework | Claude | ✅ | serverless.yml + esbuild 打包 |
+| 撰寫測試 | Claude | ✅ | 307 個測試檔案 |
+| TypeScript strict mode 驗證 | Claude | ✅ | 全部模組通過 strict 檢查 |
 
-### Milestone 1.3: 排程與驗證
+### Milestone 1.3: AWS 設定與部署 (待開始)
+
+| Task | Owner | Status | Notes |
+|------|-------|--------|-------|
+| 建立 IAM Role | - | 🔲 | 見 AGENTS.md IAM 規格（需支援 ECS + RDS） |
+| 建立 SSM Parameter | - | 🔲 | /lights-out/{env}/config（YAML 格式） |
+| 為資源加標籤 | - | 🔲 | lights-out:* tags，參考 docs/tagging-guide.md |
+| 部署 Lambda Function | - | 🔲 | 使用 Serverless Framework 部署 |
+| 測試 discover action | - | 🔲 | 驗證資源發現功能（ECS + RDS） |
+| 測試 status action | - | 🔲 | 手動 invoke |
+| 測試 stop action | - | 🔲 | 驗證 ECS desiredCount=0 + RDS stop |
+| 測試 start action | - | 🔲 | 驗證 ECS 恢復 + RDS start |
+
+### Milestone 1.4: 排程與驗證 (待開始)
 
 | Task | Owner | Status | Notes |
 |------|-------|--------|-------|
 | 建立 EventBridge Rule (stop) | - | 🔲 | cron(0 11 ? * MON-FRI *) |
 | 建立 EventBridge Rule (start) | - | 🔲 | cron(0 1 ? * MON-FRI *) |
-| 端到端測試 (stop) | - | 🔲 | 確認 ECS desiredCount=0 |
-| 端到端測試 (start) | - | 🔲 | 確認 ECS 恢復 |
-| 文件更新 | - | 🔲 | ops guide |
+| 端到端測試 (stop) | - | 🔲 | 確認 ECS + RDS 關閉 |
+| 端到端測試 (start) | - | 🔲 | 確認 ECS + RDS 啟動 |
+| 文件更新 | - | 🔲 | 更新 deployment-guide.md 與 ops guide |
 
 ---
 
-## Phase 2: NAT Gateway (未來)
+## Phase 2: RDS Handler (已完成於 TypeScript)
 
 | Task | Status | Notes |
 |------|--------|-------|
-| 設計 NAT Gateway handler | 🔲 | 刪除/重建流程 |
-| Route Table 更新邏輯 | 🔲 | |
-| EIP 保留處理 | 🔲 | |
-| 依賴順序處理 | 🔲 | NAT 需在 ECS 前啟動 |
+| 設計 RDS handler 介面 | ✅ | 已整合至 TypeScript 實作 |
+| 實作 RDS start/stop | ✅ | rdsInstance.ts（使用 AWS SDK v3） |
+| 測試 RDS handler | ✅ | 整合於 TypeScript 測試套件 |
+
+## Phase 3: 其他資源類型支援 (未來)
+
+| Task | Status | Notes |
+|------|--------|-------|
+| NAT Gateway handler | 🔲 | 刪除/重建流程 |
+| Lambda Function handler | 🔲 | Reserved concurrency 調整 |
+| DynamoDB handler | 🔲 | On-Demand ↔ Provisioned 切換 |
 
 ---
 
-## Phase 3: MCP 整合 (未來)
+## Phase 4: MCP 整合 (未來)
 
 | Task | Status | Notes |
 |------|--------|-------|
@@ -120,6 +180,7 @@ src/lambda_function/
 
 ## Done Log
 
+### Python 實作階段
 | Date | Task | Agent | Notes |
 |------|------|-------|-------|
 | 2025-12-09 | 專案規劃與文件建立 | Claude | CLAUDE.md, AGENTS.md, 部署指南等 |
@@ -137,3 +198,20 @@ src/lambda_function/
 | 2025-12-17 | 整合測試 | Claude | Orchestrator + Factory + Handler 完整流程測試 |
 | 2025-12-17 | 實作 app.py | Claude | Lambda 入口點（TDD：10 測試案例全通過） |
 | 2025-12-17 | 測試修正與文件 | Claude | 修正 MagicMock 序列化問題 + 完整測試指南 |
+
+### TypeScript 實作階段
+| Date | Task | Agent | Notes |
+|------|------|-------|-------|
+| 2025-12-18 | TypeScript 專案初始化 | Claude | 建立 typescript/ 目錄、設定檔 |
+| 2025-12-19 | 實作核心型別定義 | Claude | types.ts（Config, Resource, HandlerResult 等） |
+| 2025-12-19 | 實作 utils/logger.ts | Claude | 結構化 JSON logging（TypeScript） |
+| 2025-12-20 | 實作 core/config.ts | Claude | SSM 配置載入（AWS SDK v3） |
+| 2025-12-20 | 實作 discovery/tagDiscovery.ts | Claude | Tag-based 資源發現（AWS SDK v3） |
+| 2025-12-21 | 實作 handlers/base.ts | Claude | ResourceHandler 介面定義 |
+| 2025-12-21 | 實作 handlers/factory.ts | Claude | Handler Factory Pattern |
+| 2025-12-22 | 實作 handlers/ecsService.ts | Claude | ECS Service Handler（AWS SDK v3） |
+| 2025-12-22 | 實作 handlers/rdsInstance.ts | Claude | RDS Instance Handler（AWS SDK v3） |
+| 2025-12-23 | 實作 core/orchestrator.ts | Claude | 執行協調器 |
+| 2025-12-23 | 實作 index.ts | Claude | Lambda handler 入口 |
+| 2025-12-23 | Serverless Framework 設定 | Claude | serverless.yml + esbuild 整合 |
+| 2025-12-23 | TypeScript 測試完成 | Claude | 307 個測試檔案完成 |

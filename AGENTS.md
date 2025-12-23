@@ -8,17 +8,22 @@
 
 ### Current Phase
 - [x] Phase 0: 專案初始化（文件規劃）
-- [ ] Phase 1: ECS Service Handler (MVP)
-- [ ] Phase 2: NAT Gateway Handler
+- [x] Phase 1.1: Python 原型實作（完成）
+- [x] Phase 1.2: TypeScript 完整實作（完成）
+- [ ] Phase 1.3: AWS 環境設定與部署
+- [ ] Phase 2: 更多資源類型支援
 - [ ] Phase 3: MCP 整合
 
 ### Active Decisions
 | 決策 | 選擇 | 理由 | 日期 |
 |------|------|------|------|
-| Python 版本 | 3.11 | Lambda 穩定支援 | 2025-12-09 |
-| 部署方式 | Console → SAM | 先驗證再自動化 | 2025-12-09 |
-| Phase 1 範圍 | 僅 ECS Service | 最小可驗證單元 | 2025-12-09 |
-| 實作方式 | 漸進式學習 | 邊做邊學，避免一次生成所有程式碼 | 2025-12-09 |
+| 主要語言 | TypeScript | 現代化、型別安全、AWS SDK v3 | 2025-12-23 |
+| Runtime | Node.js 20 | Lambda 最新穩定版本 | 2025-12-23 |
+| 部署方式 | Serverless Framework | 自動化部署、簡化配置 | 2025-12-23 |
+| 打包工具 | esbuild | 快速、輕量級打包 | 2025-12-23 |
+| Phase 1 範圍 | ECS + RDS | 涵蓋常用資源類型 | 2025-12-23 |
+| Python 版本 | 3.11 (原型) | 完整的參考實作 | 2025-12-17 |
+| 實作方式 | TDD + TypeScript Strict | 確保程式碼品質與型別安全 | 2025-12-23 |
 
 ### Blockers
 <!-- Agent 遇到阻礙時在此記錄 -->
@@ -34,25 +39,50 @@
 
 ## 📋 Task Registry
 
-### Phase 1: ECS Service MVP
+### Phase 1: Lambda 函數實作
 
+#### Python 原型 (已完成)
 | ID | Task | Status | Agent | Notes |
 |----|------|--------|-------|-------|
-| P1-01 | 專案結構設計 | 🔲 | - | 建立 src/lambda_function/ 目錄結構 |
-| P1-02 | utils/logger.py | 🔲 | - | 結構化 JSON logging |
-| P1-03 | core/config.py | 🔲 | - | SSM Parameter Store 載入 |
-| P1-04 | discovery/base.py | 🔲 | - | 資源發現介面定義 |
-| P1-05 | discovery/tag_discovery.py | 🔲 | - | Tag-based 資源發現實作 |
-| P1-06 | handlers/base.py | 🔲 | - | 資源 Handler 抽象類別 |
-| P1-07 | handlers/ecs_service.py | 🔲 | - | ECS Service 啟停邏輯 |
-| P1-08 | core/scheduler.py | 🔲 | - | 時區/工作日判斷 |
-| P1-09 | core/orchestrator.py | 🔲 | - | 執行協調與錯誤處理 |
-| P1-10 | app.py | 🔲 | - | Lambda 進入點 |
-| P1-11 | 單元測試 | 🔲 | - | tests/ 目錄，使用 moto |
-| P1-12 | 整合測試 | 🔲 | - | 本地測試 |
-| P1-13 | 部署 Lambda | 🔲 | - | 手動 Console 部署 |
-| P1-14 | 建立 EventBridge | 🔲 | - | start/stop cron rules |
-| P1-15 | Workshop 驗證 | 🔲 | - | 端對端測試 |
+| P1-01 | 專案結構設計 | ✅ | Gemini CLI | 建立 src/lambda_function/ 目錄結構 |
+| P1-02 | utils/logger.py | ✅ | Gemini CLI | 結構化 JSON logging |
+| P1-03 | core/config.py | ✅ | Gemini CLI | SSM Parameter Store 載入 |
+| P1-04 | discovery/base.py | ✅ | Gemini CLI | 資源發現介面定義 |
+| P1-05 | discovery/tag_discovery.py | ✅ | Gemini CLI | Tag-based 資源發現實作 |
+| P1-06 | handlers/base.py | ✅ | Gemini CLI | 資源 Handler 抽象類別 |
+| P1-07 | handlers/ecs_service.py | ✅ | Gemini CLI | ECS Service 啟停邏輯 |
+| P1-08 | core/scheduler.py | ✅ | Gemini CLI | 時區/工作日判斷 |
+| P1-09 | core/orchestrator.py | ✅ | Claude | 執行協調與錯誤處理 |
+| P1-10 | app.py | ✅ | Claude | Lambda 進入點 |
+| P1-11 | 單元測試 | ✅ | Gemini CLI + Claude | tests/ 目錄，使用 moto |
+| P1-12 | 整合測試 | ✅ | Claude | 本地測試 |
+
+#### TypeScript 實作 (已完成)
+| ID | Task | Status | Agent | Notes |
+|----|------|--------|-------|-------|
+| TS-01 | TypeScript 專案初始化 | ✅ | Claude | package.json, tsconfig.json |
+| TS-02 | types.ts | ✅ | Claude | 共用型別定義 |
+| TS-03 | utils/logger.ts | ✅ | Claude | 結構化 JSON logging |
+| TS-04 | core/config.ts | ✅ | Claude | SSM 配置載入（AWS SDK v3） |
+| TS-05 | discovery/tagDiscovery.ts | ✅ | Claude | Tag-based 資源發現 |
+| TS-06 | handlers/base.ts | ✅ | Claude | ResourceHandler 介面 |
+| TS-07 | handlers/factory.ts | ✅ | Claude | Handler Factory Pattern |
+| TS-08 | handlers/ecsService.ts | ✅ | Claude | ECS Service Handler |
+| TS-09 | handlers/rdsInstance.ts | ✅ | Claude | RDS Instance Handler |
+| TS-10 | core/orchestrator.ts | ✅ | Claude | 執行協調器 |
+| TS-11 | index.ts | ✅ | Claude | Lambda handler 入口 |
+| TS-12 | Serverless Framework | ✅ | Claude | serverless.yml + esbuild |
+| TS-13 | 測試 | ✅ | Claude | 307 個測試檔案 |
+
+#### 部署與驗證 (待開始)
+| ID | Task | Status | Agent | Notes |
+|----|------|--------|-------|-------|
+| D-01 | 建立 IAM Role | 🔲 | - | 支援 ECS + RDS 權限 |
+| D-02 | 建立 SSM Parameter | 🔲 | - | YAML 格式配置 |
+| D-03 | 為資源加標籤 | 🔲 | - | lights-out:* tags |
+| D-04 | 部署 Lambda | 🔲 | - | 使用 Serverless Framework |
+| D-05 | 建立 EventBridge | 🔲 | - | start/stop cron rules |
+| D-06 | Workshop 驗證 | 🔲 | - | 端對端測試 |
 
 **Status:** 🔲 Todo | 🔄 In Progress | ✅ Done | ⏸️ Blocked
 
@@ -64,6 +94,49 @@
 
 **Path:** `/lights-out/{environment}/config`
 
+**格式:** YAML（TypeScript 實作）或 JSON（Python 原型）
+
+**YAML 範例:**
+```yaml
+version: "1.0"
+environment: workshop
+region: ap-southeast-1
+
+discovery:
+  method: tags
+  tagFilters:
+    lights-out:managed: "true"
+    lights-out:env: workshop
+  resourceTypes:
+    - ecs-service
+    - rds-instance
+
+resourceDefaults:
+  ecs-service:
+    waitForStable: true
+    stableTimeoutSeconds: 300
+    defaultDesiredCount: 1
+  rds-instance:
+    skipFinalSnapshot: true
+    waitTimeout: 600
+
+overrides: {}
+
+schedules:
+  default:
+    timezone: Asia/Taipei
+    startTime: "09:00"
+    stopTime: "19:00"
+    activeDays:
+      - MON
+      - TUE
+      - WED
+      - THU
+      - FRI
+    holidays: []
+```
+
+**JSON 範例（Python 原型）:**
 ```json
 {
   "version": "1.0",
@@ -75,24 +148,7 @@
       "lights-out:managed": "true",
       "lights-out:env": "workshop"
     },
-    "resource_types": ["ecs-service"]
-  },
-  "resource_defaults": {
-    "ecs-service": {
-      "wait_for_stable": true,
-      "stable_timeout_seconds": 300,
-      "default_desired_count": 1
-    }
-  },
-  "overrides": {},
-  "schedules": {
-    "default": {
-      "timezone": "Asia/Taipei",
-      "start_time": "09:00",
-      "stop_time": "19:00",
-      "active_days": ["MON", "TUE", "WED", "THU", "FRI"],
-      "holidays": []
-    }
+    "resource_types": ["ecs-service", "rds-instance"]
   }
 }
 ```
@@ -154,7 +210,22 @@ class ResourceHandler(ABC):
     {
       "Sid": "ECS",
       "Effect": "Allow",
-      "Action": ["ecs:DescribeServices", "ecs:UpdateService", "ecs:ListServices"],
+      "Action": [
+        "ecs:DescribeServices",
+        "ecs:UpdateService",
+        "ecs:ListServices",
+        "ecs:DescribeClusters"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "RDS",
+      "Effect": "Allow",
+      "Action": [
+        "rds:DescribeDBInstances",
+        "rds:StartDBInstance",
+        "rds:StopDBInstance"
+      ],
       "Resource": "*"
     },
     {
@@ -172,7 +243,11 @@ class ResourceHandler(ABC):
     {
       "Sid": "Logs",
       "Effect": "Allow",
-      "Action": ["logs:CreateLogGroup", "logs:CreateLogStream", "logs:PutLogEvents"],
+      "Action": [
+        "logs:CreateLogGroup",
+        "logs:CreateLogStream",
+        "logs:PutLogEvents"
+      ],
       "Resource": "*"
     }
   ]
@@ -183,9 +258,10 @@ class ResourceHandler(ABC):
 
 | Variable | Required | Default | Description |
 |----------|----------|---------|-------------|
-| `CONFIG_PARAMETER_PATH` | Yes | - | SSM parameter path |
+| `CONFIG_PARAMETER_NAME` | Yes | - | SSM parameter name (e.g., `/lights-out/workshop/config`) |
 | `DRY_RUN` | No | `false` | Skip actual operations |
 | `LOG_LEVEL` | No | `INFO` | Logging level |
+| `AWS_REGION` | No | `ap-southeast-1` | AWS Region (由 Lambda 自動設定) |
 
 ---
 

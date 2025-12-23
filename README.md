@@ -11,9 +11,11 @@
 ### 核心功能
 
 - ✅ Tag-based 資源自動發現
-- ✅ 排程啟動/停止（支援時區、假日）
+- ✅ 支援 ECS Service 與 RDS Instance 管理
 - ✅ 資源優先級控制（避免依賴問題）
-- ✅ Dry-run 模式（安全測試）
+- ✅ TypeScript + AWS SDK v3 實作（現代化架構）
+- ✅ Serverless Framework 部署
+- 🚧 未來支援更多資源類型
 - 🚧 未來支援 MCP AI Agent 手動控制
 
 ---
@@ -22,20 +24,27 @@
 
 | 類別 | 技術 |
 |------|------|
-| **Runtime** | Python 3.11 |
-| **Deployment** | AWS Lambda (Serverless) |
+| **Runtime** | TypeScript (Node.js 20) + AWS SDK v3 |
+| **Deployment** | AWS Lambda (Serverless Framework) |
 | **Trigger** | EventBridge (Cron) |
-| **Config** | SSM Parameter Store (JSON) |
+| **Config** | SSM Parameter Store (YAML) |
 | **Discovery** | Resource Groups Tagging API |
 | **Logging** | 結構化 JSON (CloudWatch Logs) |
-| **IaC** | 手動部署 → SAM (Phase 2) |
+| **Build** | esbuild (ESM bundling) |
 
 ### 開發工具
 
+**TypeScript (主要實作)**:
+- **Testing:** Vitest + aws-sdk-client-mock
+- **Type Checking:** TypeScript strict mode
+- **Bundling:** esbuild + Serverless Framework
+- **Testing:** 307 個測試檔案
+
+**Python (原型實作)**:
 - **Testing:** pytest + moto (AWS mock)
 - **Type Checking:** mypy
 - **Code Quality:** black, ruff
-- **Workflow:** TDD (Test-Driven Development)
+- **測試:** 11 個測試檔案，100+ 測試案例
 
 ---
 
@@ -43,59 +52,73 @@
 
 ### 前置需求
 
-- **Python:** 3.11+ ([安裝指南](https://www.python.org/downloads/))
-- **AWS CLI:** 已配置 (用於手動部署)
+- **Node.js:** 20+ (推薦使用 [nvm](https://github.com/nvm-sh/nvm))
+- **pnpm:** 最新版本 (`npm install -g pnpm`)
+- **AWS CLI:** 已配置 (用於部署)
 - **權限:** 能存取目標 AWS 帳號
 
-### 本機開發環境設置
+### 本機開發環境設置（TypeScript）
 
 ```bash
 # 1. Clone 專案
 git clone https://github.com/ViewSonic/aws-lights-out-plan.git
-cd aws-lights-out-plan
+cd aws-lights-out-plan/typescript
 
-# 2. 建立 Python 虛擬環境（Python 3.11）
+# 2. 安裝相依套件
+pnpm install
+
+# 3. 驗證安裝
+node --version  # 應顯示 v20.x.x
+pnpm --version
+pnpm tsc --version
+
+# 4. 建置專案
+pnpm build
+
+# 5. 執行測試
+pnpm test
+```
+
+### 執行測試（TypeScript）
+
+```bash
+cd typescript
+
+# 執行所有測試
+pnpm test
+
+# 監視模式（開發時使用）
+pnpm test:watch
+
+# 產生覆蓋率報告
+pnpm test:coverage
+
+# 型別檢查
+pnpm type-check
+
+# Linting
+pnpm lint
+```
+
+### Python 原型開發（選用）
+
+```bash
+# 1. 建立 Python 虛擬環境（Python 3.11）
 python3.11 -m venv .venv
 
-# 3. 啟動虛擬環境
+# 2. 啟動虛擬環境
 source .venv/bin/activate  # macOS/Linux
 # .venv\Scripts\activate   # Windows
 
-# 4. 升級 pip 並安裝開發依賴
+# 3. 安裝開發依賴
 pip install --upgrade pip
 pip install -r requirements-dev.txt
 
-# 5. 驗證安裝
-python --version  # 應顯示 Python 3.11.x
-pytest --version
-mypy --version
-```
-
-### 執行測試
-
-```bash
-# 執行所有測試（含 coverage）
+# 4. 執行測試
 pytest
 
-# 僅執行單元測試（快速）
-pytest -m unit
-
-# 執行特定測試檔案
-pytest tests/unit/test_utils_logger.py -v
-
-# 產生 HTML coverage 報告
-pytest --cov-report=html
-open htmlcov/index.html  # 開啟報告
-```
-
-### 型別檢查
-
-```bash
-# 檢查整個專案
+# 5. 型別檢查
 mypy src/lambda_function
-
-# 檢查特定檔案
-mypy src/lambda_function/utils/logger.py
 ```
 
 ---
@@ -104,38 +127,49 @@ mypy src/lambda_function/utils/logger.py
 
 ```
 aws-lights-out-plan/
-├── src/lambda_function/     # Lambda 程式碼（部署包）
+├── typescript/              # TypeScript 主要實作（生產使用）
+│   ├── src/
+│   │   ├── index.ts         # Lambda handler 入口
+│   │   ├── types.ts         # 共用型別定義
+│   │   ├── core/
+│   │   │   ├── config.ts    # SSM 配置載入
+│   │   │   └── orchestrator.ts  # 執行協調
+│   │   ├── discovery/
+│   │   │   └── tagDiscovery.ts  # Tag-based 資源發現
+│   │   ├── handlers/
+│   │   │   ├── base.ts      # Handler 介面
+│   │   │   ├── factory.ts   # Factory Pattern
+│   │   │   ├── ecsService.ts    # ECS Service Handler
+│   │   │   └── rdsInstance.ts   # RDS Instance Handler
+│   │   └── utils/
+│   │       └── logger.ts    # 結構化 logging
+│   ├── tests/               # 307 個測試檔案
+│   ├── serverless.yml       # Serverless Framework 設定
+│   ├── tsconfig.json        # TypeScript 配置（strict mode）
+│   └── package.json         # 相依套件
+│
+├── src/lambda_function/     # Python 原型實作（參考）
 │   ├── app.py               # Lambda 進入點
 │   ├── core/                # 核心業務邏輯
-│   │   ├── config.py        # SSM 配置載入
-│   │   ├── scheduler.py     # 時區/假日判斷
-│   │   └── orchestrator.py  # 執行協調
 │   ├── discovery/           # 資源發現模組
-│   │   ├── base.py          # 介面定義
-│   │   └── tag_discovery.py # Tag-based 實作
-│   ├── handlers/            # 資源處理器（可擴充）
-│   │   ├── base.py          # Handler 抽象類別
-│   │   ├── ecs_service.py   # ECS Service 處理
-│   │   └── nat_gateway.py   # NAT Gateway 處理（Phase 2）
-│   └── utils/
-│       └── logger.py        # 結構化 logging
-├── tests/
-│   ├── unit/                # 單元測試（使用 moto mock）
-│   └── integration/         # 整合測試（可選）
+│   ├── handlers/            # 資源處理器
+│   └── utils/               # 工具模組
+│
+├── tests/                   # Python 測試（11 個測試檔案）
 ├── docs/
 │   ├── deployment-guide.md  # 部署指南
+│   ├── ssm-operations-guide.md  # SSM 操作指南
 │   └── tagging-guide.md     # 標籤操作手冊
-├── requirements.txt         # 生產依賴
-├── requirements-dev.txt     # 開發依賴
-├── pytest.ini               # pytest 配置
 ├── AGENTS.md                # Agent 協作文件
 ├── TASKS.md                 # 任務追蹤
 └── CLAUDE.md                # AI Agent 專案規範
 
 **Why this structure:**
+- `typescript/` 生產實作：使用 TypeScript + AWS SDK v3，現代化架構
 - `handlers/` 模組化：新增資源類型只需加檔案，不動既有程式碼
 - `discovery/` 抽象化：配置與程式碼分離，資源清單不寫死
-- `core/` 業務邏輯：不直接呼叫 boto3，方便測試
+- `core/` 業務邏輯：不直接呼叫 AWS SDK，方便測試
+- `src/lambda_function/` Python 原型：完整的 Python 實作作為參考
 ```
 
 ---
@@ -165,22 +199,42 @@ aws ecs tag-resource \
 
 ---
 
-## 🔧 本地測試
+## 🔧 本地測試與部署
 
-### 模擬 Lambda 執行
+### 模擬 Lambda 執行（TypeScript）
 
 ```bash
-# 測試資源發現
-python -m src.lambda.app discover
+cd typescript
 
-# 測試停止動作（dry-run）
-DRY_RUN=true python -m src.lambda.app stop
+# 本地測試（使用 Serverless Offline，選用）
+pnpm sls invoke local -f lights-out --data '{"action":"status"}'
 
-# 測試啟動動作（dry-run）
-DRY_RUN=true python -m src.lambda.app start
+# 建置
+pnpm build
+
+# 檢查打包大小
+ls -lh dist/
 ```
 
-### 打包部署
+### 部署至 AWS（TypeScript）
+
+```bash
+cd typescript
+
+# 部署至開發環境
+pnpm deploy:dev
+
+# 部署至 Staging
+pnpm deploy:staging
+
+# 部署至生產環境
+pnpm deploy:prod
+
+# 查看 Lambda 日誌
+pnpm sls logs -f lights-out --tail
+```
+
+### Python 打包（僅供參考）
 
 ```bash
 # 建立部署包
@@ -246,17 +300,22 @@ git commit -m "docs(deployment): update Lambda IAM requirements"
 ### 當前階段
 
 - [x] Phase 0: 專案初始化（文件規劃）
-- [ ] Phase 1: ECS Service Handler (MVP)
-- [ ] Phase 2: NAT Gateway Handler
+- [x] Phase 1.1: Python 原型實作（ECS Service Handler）
+- [x] Phase 1.2: TypeScript 完整實作（ECS + RDS Handler）
+- [ ] Phase 1.3: AWS 環境設定與部署
+- [ ] Phase 2: 更多資源類型支援（NAT Gateway、Lambda 等）
 - [ ] Phase 3: MCP 整合
 
 ### 技術決策
 
-| 決策 | 選擇 | 理由 |
-|------|------|------|
-| Python 版本 | 3.11 | Lambda 穩定支援 |
-| 部署方式 | Console → SAM | 先驗證再自動化 |
-| Phase 1 範圍 | 僅 ECS Service | 最小可驗證單元 |
+| 決策 | 選擇 | 理由 | 日期 |
+|------|------|------|------|
+| 主要語言 | TypeScript | 現代化、型別安全、AWS SDK v3 | 2025-12-23 |
+| Runtime | Node.js 20 | Lambda 最新穩定版本 | 2025-12-23 |
+| 部署方式 | Serverless Framework | 自動化部署、簡化配置 | 2025-12-23 |
+| 打包工具 | esbuild | 快速、輕量級打包 | 2025-12-23 |
+| Phase 1 範圍 | ECS + RDS | 涵蓋常用資源類型 | 2025-12-23 |
+| Python 版本 | 3.11 (原型) | 完整的參考實作 | 2025-12-17 |
 
 ---
 

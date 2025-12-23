@@ -1,22 +1,36 @@
 # Deployment Guide
 
-> **注意：** 本指南假設 Phase 1 程式碼已開發完成。當前專案仍在開發階段。
+本指南說明如何部署 Lights-Out Lambda 函數至 AWS。
 
-## Phase 1: Console 手動部署
+## 前置條件
 
-### 前置條件
+### 必要工具
+- **Node.js:** 20+ ([安裝指南](https://nodejs.org/))
+- **pnpm:** 最新版本 (`npm install -g pnpm`)
+- **AWS CLI:** 已設定 (`aws configure`)
+- **Serverless Framework:** 已安裝（透過 pnpm 自動安裝）
 
-- AWS CLI 已設定 (`aws configure`)
-- 有權限建立 Lambda、IAM Role、SSM Parameter
-- Workshop 環境的 ECS Service 還在運作
-- Phase 1 程式碼已完成（src/lambda_function/ 目錄）
+### AWS 權限
+- Lambda 建立與管理
+- IAM Role 建立
+- SSM Parameter 存取
+- CloudFormation Stack 建立（Serverless Framework 使用）
+- EventBridge Rule 建立
 
-### Step 1: 建立 IAM Role
+## 部署方式
 
-1. **IAM** → **Roles** → **Create role**
-2. **Trusted entity:** AWS service → Lambda
-3. **Role name:** `lights-out-lambda-role`
-4. 建立後，附加 inline policy：
+### TypeScript + Serverless Framework（推薦）
+
+本專案使用 Serverless Framework 自動化部署，簡化配置與管理。
+
+### Step 1: 安裝相依套件
+
+```bash
+cd aws-lights-out-plan/typescript
+pnpm install
+```
+
+Serverless Framework 會自動建立所需的 IAM Role，包含以下權限：
 
 ```json
 {
@@ -34,6 +48,16 @@
       "Resource": "*"
     },
     {
+      "Sid": "RDS",
+      "Effect": "Allow",
+      "Action": [
+        "rds:DescribeDBInstances",
+        "rds:StartDBInstance",
+        "rds:StopDBInstance"
+      ],
+      "Resource": "*"
+    },
+    {
       "Sid": "Tagging",
       "Effect": "Allow",
       "Action": ["tag:GetResources"],
@@ -43,7 +67,7 @@
       "Sid": "SSM",
       "Effect": "Allow",
       "Action": ["ssm:GetParameter"],
-      "Resource": "arn:aws:ssm:ap-southeast-1:*:parameter/lights-out/*"
+      "Resource": "arn:aws:ssm:*:*:parameter/lights-out/*"
     },
     {
       "Sid": "Logs",
@@ -61,124 +85,228 @@
 
 ### Step 2: 建立 SSM Parameter
 
-1. **Systems Manager** → **Parameter Store** → **Create parameter**
-2. **Name:** `/lights-out/workshop/config`
-3. **Type:** String
-4. **Value:**
-
-```json
-{
-  "version": "1.0",
-  "environment": "workshop",
-  "region": "ap-southeast-1",
-  "discovery": {
-    "method": "tags",
-    "tag_filters": {
-      "lights-out:managed": "true",
-      "lights-out:env": "workshop"
-    },
-    "resource_types": ["ecs-service"]
-  },
-  "resource_defaults": {
-    "ecs-service": {
-      "wait_for_stable": false,
-      "stable_timeout_seconds": 300,
-      "default_desired_count": 1
-    }
-  },
-  "overrides": {},
-  "schedules": {
-    "default": {
-      "timezone": "Asia/Taipei",
-      "start_time": "09:00",
-      "stop_time": "19:00",
-      "active_days": ["MON", "TUE", "WED", "THU", "FRI"],
-      "holidays": []
-    }
-  }
-}
-```
-
-### Step 3: 為 ECS Service 加標籤
-
-參考 [tagging-guide.md](./tagging-guide.md)
-
-### Step 4: 打包 Lambda
+建立配置參數（使用 YAML 格式）：
 
 ```bash
-cd src/lambda_function
-zip -r ../../function.zip . -x "*.pyc" -x "__pycache__/*" -x "*.pytest_cache/*"
-cd ../..
+# 1. 建立配置檔案
+cat > /tmp/lights-out-config.yml <<'EOF'
+version: "1.0"
+environment: workshop
+region: ap-southeast-1
+
+discovery:
+  method: tags
+  tagFilters:
+    lights-out:managed: "true"
+    lights-out:env: workshop
+  resourceTypes:
+    - ecs-service
+    - rds-instance
+
+resourceDefaults:
+  ecs-service:
+    waitForStable: false
+    stableTimeoutSeconds: 300
+    defaultDesiredCount: 1
+  rds-instance:
+    skipFinalSnapshot: true
+    waitTimeout: 600
+
+overrides: {}
+
+schedules:
+  default:
+    timezone: Asia/Taipei
+    startTime: "09:00"
+    stopTime: "19:00"
+    activeDays:
+      - MON
+      - TUE
+      - WED
+      - THU
+      - FRI
+    holidays: []
+EOF
+
+# 2. 上傳至 SSM Parameter Store
+aws ssm put-parameter \
+  --name "/lights-out/workshop/config" \
+  --type "String" \
+  --value "file:///tmp/lights-out-config.yml" \
+  --description "Lights-Out configuration for workshop environment" \
+  --region ap-southeast-1
 ```
 
-### Step 5: 建立 Lambda Function
+參考範例檔案：`docs/ssm-config-examples/workshop.yml`
 
-1. **Lambda** → **Create function**
-2. **Function name:** `lights-out`
-3. **Runtime:** Python 3.11
-4. **Architecture:** x86_64
-5. **Execution role:** 選擇 `lights-out-lambda-role`
-6. 建立後：
-   - **Configuration** → **General configuration** → Edit
-     - Memory: 256 MB
-     - Timeout: 5 minutes
-   - **Configuration** → **Environment variables** → Edit
-     - `CONFIG_PARAMETER_PATH` = `/lights-out/workshop/config`
-     - `LOG_LEVEL` = `INFO`
-7. **Code** → **Upload from** → **.zip file** → 上傳 `function.zip`
-8. **Runtime settings** → Edit
-   - Handler: `app.handler`
+### Step 3: 為資源加標籤
 
-### Step 6: 測試
+為 ECS Service 與 RDS Instance 加上必要標籤。參考 [tagging-guide.md](./tagging-guide.md)
+
+### Step 4: 部署 Lambda Function
 
 ```bash
-# 測試 discover
-aws lambda invoke \
-  --function-name lights-out \
-  --payload '{"action": "discover"}' \
-  --cli-binary-format raw-in-base64-out \
-  output.json && cat output.json
+cd typescript
 
-# 測試 status
-aws lambda invoke \
-  --function-name lights-out \
-  --payload '{"action": "status"}' \
-  --cli-binary-format raw-in-base64-out \
-  output.json && cat output.json
+# 部署至開發環境
+pnpm sls deploy --stage dev
 
-# 測試 stop (dry-run)
-aws lambda invoke \
-  --function-name lights-out \
-  --payload '{"action": "stop", "dry_run": true}' \
-  --cli-binary-format raw-in-base64-out \
-  output.json && cat output.json
+# 部署至 Workshop 環境
+pnpm sls deploy --stage workshop
+
+# 部署至 Staging 環境
+pnpm sls deploy --stage staging
+
+# 部署至生產環境
+pnpm sls deploy --stage prod
 ```
 
-### Step 7: 建立 EventBridge Rules
+Serverless Framework 會自動執行：
+- 建立 IAM Role（含所需權限）
+- 建立 Lambda Function（Node.js 20 runtime）
+- 設定環境變數
+- 建立 CloudWatch Log Group
+- 部署最佳化的程式碼包（使用 esbuild）
 
-#### Stop Rule (每天 19:00 台北時間)
+### Step 5: 測試部署
+
+```bash
+# 測試 discover action
+pnpm sls invoke -f lights-out --stage workshop --data '{"action":"discover"}'
+
+# 測試 status action
+pnpm sls invoke -f lights-out --stage workshop --data '{"action":"status"}'
+
+# 測試 stop action (dry-run)
+pnpm sls invoke -f lights-out --stage workshop --data '{"action":"stop","dryRun":true}'
+
+# 測試 start action (dry-run)
+pnpm sls invoke -f lights-out --stage workshop --data '{"action":"start","dryRun":true}'
+
+# 查看 Lambda 日誌
+pnpm sls logs -f lights-out --stage workshop --tail
+```
+
+### Step 6: 建立 EventBridge Rules
+
+使用 AWS Console 或 AWS CLI 建立排程規則：
+
+#### 使用 AWS CLI
+
+```bash
+# Stop Rule (每天 19:00 台北時間 = UTC 11:00)
+aws events put-rule \
+  --name lights-out-workshop-stop \
+  --schedule-expression "cron(0 11 ? * MON-FRI *)" \
+  --state ENABLED \
+  --region ap-southeast-1
+
+# 新增 Lambda 為 target
+aws events put-targets \
+  --rule lights-out-workshop-stop \
+  --targets "Id"="1","Arn"="arn:aws:lambda:ap-southeast-1:ACCOUNT_ID:function:lights-out-workshop","Input"='{"action":"stop"}' \
+  --region ap-southeast-1
+
+# Start Rule (每天 09:00 台北時間 = UTC 01:00)
+aws events put-rule \
+  --name lights-out-workshop-start \
+  --schedule-expression "cron(0 1 ? * MON-FRI *)" \
+  --state ENABLED \
+  --region ap-southeast-1
+
+# 新增 Lambda 為 target
+aws events put-targets \
+  --rule lights-out-workshop-start \
+  --targets "Id"="1","Arn"="arn:aws:lambda:ap-southeast-1:ACCOUNT_ID:function:lights-out-workshop","Input"='{"action":"start"}' \
+  --region ap-southeast-1
+
+# 賦予 EventBridge 執行 Lambda 的權限
+aws lambda add-permission \
+  --function-name lights-out-workshop \
+  --statement-id AllowEventBridgeInvoke \
+  --action lambda:InvokeFunction \
+  --principal events.amazonaws.com \
+  --source-arn arn:aws:events:ap-southeast-1:ACCOUNT_ID:rule/lights-out-workshop-* \
+  --region ap-southeast-1
+```
+
+#### 使用 AWS Console
 
 1. **EventBridge** → **Rules** → **Create rule**
-2. **Name:** `lights-out-stop`
-3. **Schedule:** `cron(0 11 ? * MON-FRI *)` (UTC 11:00 = 台北 19:00)
-4. **Target:** Lambda function → `lights-out`
-5. **Input:** Constant (JSON text)
-   ```json
-   {"action": "stop"}
-   ```
-
-#### Start Rule (每天 09:00 台北時間)
-
-1. **Name:** `lights-out-start`
-2. **Schedule:** `cron(0 1 ? * MON-FRI *)` (UTC 01:00 = 台北 09:00)
-3. **Target:** Lambda function → `lights-out`
-4. **Input:**
-   ```json
-   {"action": "start"}
-   ```
+2. **Stop Rule:**
+   - Name: `lights-out-workshop-stop`
+   - Schedule: `cron(0 11 ? * MON-FRI *)`
+   - Target: Lambda → `lights-out-workshop`
+   - Input: `{"action":"stop"}`
+3. **Start Rule:**
+   - Name: `lights-out-workshop-start`
+   - Schedule: `cron(0 1 ? * MON-FRI *)`
+   - Target: Lambda → `lights-out-workshop`
+   - Input: `{"action":"start"}`
 
 ---
 
-## 之後: SAM 自動化部署
+## 監控與維護
 
-當手動部署驗證完成後，可以導入 SAM 進行自動化。詳見 Phase 2 規劃。
+### 查看 Lambda 日誌
+
+```bash
+# 即時查看日誌
+pnpm sls logs -f lights-out --stage workshop --tail
+
+# 查看最近的日誌
+pnpm sls logs -f lights-out --stage workshop --startTime 1h
+
+# 使用 AWS CLI 查看
+aws logs tail /aws/lambda/lights-out-workshop --follow --region ap-southeast-1
+```
+
+### 更新部署
+
+```bash
+# 修改程式碼後重新部署
+cd typescript
+pnpm build
+pnpm sls deploy --stage workshop
+
+# 僅更新函數程式碼（快速部署）
+pnpm sls deploy function -f lights-out --stage workshop
+```
+
+### 移除部署
+
+```bash
+# 移除整個 CloudFormation Stack
+pnpm sls remove --stage workshop
+```
+
+---
+
+## 故障排除
+
+### Lambda 執行失敗
+
+1. 檢查 CloudWatch Logs
+2. 確認 IAM Role 權限正確
+3. 確認 SSM Parameter 存在且格式正確
+4. 確認資源標籤正確
+
+### 資源未被發現
+
+1. 確認資源有正確的標籤
+2. 檢查 SSM 配置中的 `tagFilters`
+3. 使用 `discover` action 測試
+
+### EventBridge 未觸發
+
+1. 確認 EventBridge Rule 狀態為 ENABLED
+2. 確認 cron 表達式正確
+3. 確認 Lambda 有權限被 EventBridge 觸發
+
+---
+
+## 附錄：Python 手動部署（僅供參考）
+
+如需部署 Python 版本，請參考原始的手動部署流程，使用 Console 上傳 ZIP 檔案。
+
+詳見：`docs/deployment-guide-python.md`（需單獨建立）
