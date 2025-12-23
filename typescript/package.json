@@ -7,7 +7,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
-    "build": "tsc && esbuild src/index.ts --bundle --platform=node --outfile=dist/index.js",
+    "build": "tsc -p tsconfig.build.json --noEmit",
     "deploy": "serverless deploy --stage poc",
     "deploy:prod": "serverless deploy --stage prod",
     "perf-test": "bash scripts/performance-test.sh",
@@ -35,6 +35,8 @@
     "@vitest/coverage-v8": "^4.0.16",
     "aws-sdk-client-mock": "^4.1.0",
     "esbuild": "^0.27.2",
+    "serverless": "^4.29.0",
+    "serverless-esbuild": "^1.57.0",
     "typescript": "^5.9.3",
     "vitest": "^4.0.16"
   }

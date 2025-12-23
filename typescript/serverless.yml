@@ -24,7 +24,7 @@ provider:
 
 functions:
   lights-out:
-    handler: dist/index.main
+    handler: src/index.main
     runtime: nodejs20.x
     timeout: 300
     memorySize: 512
@@ -37,7 +37,7 @@ custom:
     bundle: true
     minify: true
     sourcemap: true
-    exclude: ["aws-sdk"]
+    external: []
     target: node20
     platform: node
 
