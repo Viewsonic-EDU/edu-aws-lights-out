@@ -21,7 +21,7 @@ resourceDefaults:
     waitForStable: true
     stableTimeoutSeconds: 300
     defaultDesiredCount: 1
-  rds-instance:
+  rds-db:
     skipFinalSnapshot: true
     waitTimeout: 600
 

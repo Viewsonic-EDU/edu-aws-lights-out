@@ -26,7 +26,7 @@ describe('RDSInstanceHandler', () => {
     rdsMock.reset();
 
     sampleResource = {
-      resourceType: 'rds-instance',
+      resourceType: 'rds-db',
       arn: 'arn:aws:rds:us-east-1:123456789012:db:test-database',
       resourceId: 'test-database',
       priority: 100,
@@ -44,7 +44,7 @@ describe('RDSInstanceHandler', () => {
         method: 'tags',
       },
       resource_defaults: {
-        'rds-instance': {
+        'rds-db': {
           wait_for_stable: false, // Disable for faster tests
           stable_timeout_seconds: 600,
         },
@@ -228,7 +228,7 @@ describe('RDSInstanceHandler', () => {
       const configWithWait: Config = {
         ...sampleConfig,
         resource_defaults: {
-          'rds-instance': {
+          'rds-db': {
             wait_for_stable: true,
             stable_timeout_seconds: 40,
           },
@@ -260,7 +260,7 @@ describe('RDSInstanceHandler', () => {
          const configWithWait: Config = {
         ...sampleConfig,
         resource_defaults: {
-          'rds-instance': {
+          'rds-db': {
             wait_for_stable: true,
             stable_timeout_seconds: 5,
           },
@@ -288,7 +288,7 @@ describe('RDSInstanceHandler', () => {
        const configWithWait: Config = {
         ...sampleConfig,
         resource_defaults: {
-          'rds-instance': {
+          'rds-db': {
             wait_for_stable: true,
             stable_timeout_seconds: 5,
           },
@@ -414,7 +414,7 @@ describe('RDSInstanceHandler', () => {
       const configWithWait: Config = {
         ...sampleConfig,
         resource_defaults: {
-          'rds-instance': {
+          'rds-db': {
             wait_for_stable: true,
             stable_timeout_seconds: 40, // Must be > minDelay (30s)
           },

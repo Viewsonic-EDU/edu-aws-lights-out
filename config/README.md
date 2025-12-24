@@ -4,13 +4,19 @@
 
 ## 檔案結構
 
-```
+```ini
 config/
-├── README.md        # 本檔案
-├── sss-lab.yml      # sss-lab 環境配置
-├── sss-dev.yml      # sss-dev 環境配置（範例）
-└── sss-stage.yml    # sss-stage 環境配置（待建立）
+├── README.md                      # 本檔案
+├── sss-lab.yml                    # sss-lab 環境配置（單一 Lambda 模式）
+└── pg-development/                # pg-development 帳號（多專案模式）
+    └── airsync-dev.yml           # AirSync 開發環境
+
 ```
+
+**部署模式說明：**
+
+- **單一 Lambda 模式**：根目錄的 YAML 檔（如 `sss-lab.yml`），一個帳號只有一個 Lambda
+- **多專案模式**：子目錄結構（如 `pg-development/`），一個帳號部署多個獨立 Lambda，每個專案/服務有自己的配置
 
 ## 配置檔案格式
 
@@ -40,7 +46,14 @@ resourceDefaults:
     waitForStable: true
     stableTimeoutSeconds: 300
     defaultDesiredCount: 1
-  rds-instance:
+    # 彈性停止行為（新功能）
+    stopBehavior:
+      mode: "scale_to_zero"  # 預設：完全關閉
+      # mode: "reduce_by_count"  # 逐步驗證：每次減少 N 個
+      # reduceByCount: 1
+      # mode: "reduce_to_count"  # 設定固定數量
+      # reduceToCount: 1
+  rds-db:
     skipFinalSnapshot: true
     waitTimeout: 600
 
@@ -66,7 +79,7 @@ schedules:
 - **environment**: 環境名稱（應與檔名一致）
 - **discovery.method**: 資源發現方法（目前僅支援 "tags"）
 - **discovery.tags**: Tag 過濾條件
-- **discovery.resource_types**: 要管理的資源類型
+- __discovery.resource_types__: 要管理的資源類型
 
 ### 可選欄位
 
@@ -74,32 +87,132 @@ schedules:
 - **resourceDefaults**: 各資源類型的預設行為
 - **schedules**: 排程設定（目前由 EventBridge 管理，此欄位保留供未來使用）
 
+### resourceDefaults.ecs-service.stopBehavior（新功能）
+
+彈性停止行為，支援三種模式：
+
+#### 1. scale_to_zero（預設，向下相容）
+
+完全關閉服務，設定 desiredCount 為 0。
+
+```yaml
+stopBehavior:
+  mode: "scale_to_zero"
+```
+
+#### 2. reduce_by_count（逐步驗證模式）
+
+每次執行減少指定數量，適合分階段驗證影響。
+
+```yaml
+stopBehavior:
+  mode: "reduce_by_count"
+  reduceByCount: 1  # 每次減少 1 個 task
+```
+
+**範例：** 如果服務當前 desiredCount 為 3
+
+- 第一次執行 stop：3 → 2
+- 第二次執行 stop：2 → 1
+- 第三次執行 stop：1 → 0
+
+**注意：** 不會低於 0（會自動 floor 至 0）
+
+#### 3. reduce_to_count（固定目標模式）
+
+設定為固定數量，保留最小運行實例。
+
+```yaml
+stopBehavior:
+  mode: "reduce_to_count"
+  reduceToCount: 1  # 停止時保留 1 個 task
+```
+
+**使用場景：** 需要保留一個實例處理背景任務或監控
+
 ## 部署流程
 
-### 部署到 sss-lab
+### 單一 Lambda 模式部署（sss-lab）
 
 ```bash
-pnpm deploy
-# 或
-sls deploy --stage poc
+pnpm deploy:sss-lab
+# 等同於：serverless deploy --stage sss-lab
 ```
 
 Serverless Framework 會自動：
-1. 讀取 `config/sss-lab.yml`
-2. 將內容上傳到 SSM Parameter: `/lights-out/config`
-3. Lambda 函數從 SSM 讀取配置
 
-### 部署到其他環境
+1. 讀取 `config/sss-lab.yml`
+2. Lambda 函數名稱：`lights-out-sss-lab`
+3. SSM Parameter 路徑：`/lights-out/sss-lab/config`
+
+### 多專案模式部署（pg-development）
+
+每個專案/服務部署獨立的 Lambda：
 
 ```bash
-# 部署到 sss-dev
-sls deploy --stage sss-dev --aws-profile sss-dev
-
-# 部署到 sss-stage
-sls deploy --stage sss-stage --aws-profile sss-stage
+# 部署 AirSync 開發環境
+pnpm deploy:airsync-dev
+# 等同於：serverless deploy --stage pg-development-airsync-dev
 ```
 
-**注意：** 部署前請確保對應的配置檔案存在（如 `config/sss-dev.yml`）
+每個 Lambda：
+
+- 函數名稱：`lights-out-{stage}`（例如：`lights-out-pg-development-airsync-dev`）
+- SSM Parameter：`/lights-out/{stage}/config`
+- 配置檔案：`config/pg-development/airsync-dev.yml`
+- 獨立排程、獨立權限、獨立資源管理
+
+### 新增專案到多專案模式
+
+**步驟 1：建立配置檔案**
+
+```bash
+# 建立新專案配置
+cp config/pg-development/airsync-dev.yml config/pg-development/new-service-dev.yml
+
+# 編輯配置
+vim config/pg-development/new-service-dev.yml
+```
+
+**步驟 2：更新 serverless.yml**
+
+在 `custom.resolveConfigPath` 中新增映射：
+
+```yaml
+custom:
+  resolveConfigPath:
+    pg-development-new-service-dev: pg-development/new-service-dev.yml
+```
+
+**步驟 3：更新 package.json**
+
+新增部署腳本：
+
+```json
+{
+  "scripts": {
+    "deploy:pg-new": "serverless deploy --stage pg-development-new-service-dev"
+  }
+}
+```
+
+**步驟 4：標記 AWS 資源**
+
+為需要管理的 ECS Service 加上 tags：
+
+```bash
+aws ecs tag-resource \
+  --resource-arn arn:aws:ecs:ap-northeast-1:ACCOUNT:service/CLUSTER/SERVICE \
+  --tags \
+    lights-out:managed=true \
+    lights-out:project=new-service-dev
+```
+
+**步驟 5：部署**
+
+```bash
+pnpm deploy:pg-new
+```
 
 ## 修改配置
 
@@ -114,6 +227,7 @@ pnpm deploy
 ```
 
 **優點：**
+
 - ✅ 配置變更有 Git history
 - ✅ 透過 Code Review 確保正確性
 - ✅ 可回滾到任意版本
@@ -130,6 +244,7 @@ aws ssm put-parameter \
 ```
 
 **缺點：**
+
 - ❌ 無版本控制
 - ❌ 與 Git 中的配置不同步
 - ❌ 下次部署會被覆蓋

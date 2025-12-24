@@ -85,7 +85,7 @@ describe("HandlerResult interface", () => {
     const result: HandlerResult = {
       success: false,
       action: "stop",
-      resourceType: "rds-instance",
+      resourceType: "rds-db",
       resourceId: "my-database",
       message: "Stop operation failed",
       error: "DB instance not found",
@@ -129,7 +129,7 @@ describe("Config interface", () => {
           stable_timeout_seconds: 300,
           default_desired_count: 2,
         },
-        "rds-instance": {
+        "rds-db": {
           wait_for_stable: false,
           stable_timeout_seconds: 600,
         },
@@ -142,7 +142,7 @@ describe("Config interface", () => {
     expect(
       config.resource_defaults?.["ecs-service"]?.default_desired_count
     ).toBe(2);
-    expect(config.resource_defaults?.["rds-instance"]?.wait_for_stable).toBe(
+    expect(config.resource_defaults?.["rds-db"]?.wait_for_stable).toBe(
       false
     );
   });

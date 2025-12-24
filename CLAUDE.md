@@ -16,7 +16,7 @@
 
 ## Architecture
 
-```
+```ini
 src/
 ├── index.ts            # Lambda handler entry point
 ├── types.ts            # Shared type definitions
@@ -28,13 +28,14 @@ src/
 │   └── tag-discovery.ts # Tag-based resource discovery
 ├── handlers/
 │   ├── base.ts         # Abstract ResourceHandler interface
-│   ├── ecs-service.ts  # ECS service handler
-│   └── rds-instance.ts # RDS instance handler
+│   ├── ecsService.ts  # ECS service handler
+│   └── rdsInstance.ts # RDS instance handler
 └── utils/
     └── logger.ts       # Pino logger setup
 ```
 
 **Why this structure:**
+
 - `handlers/` 模組化：新增資源類型實作 `ResourceHandler` 介面即可
 - `discovery/` 抽象化：配置與程式碼分離，資源清單動態發現
 - `core/` 業務邏輯：可注入 mock clients，方便單元測試
@@ -43,7 +44,8 @@ src/
 ## Conventions
 
 **Tags（必須）:**
-```
+
+```ini
 lights-out:managed  = true
 lights-out:env      = workshop | dev | staging
 lights-out:priority = 100    # 數字越小越優先（啟動先/關閉後）
@@ -54,12 +56,14 @@ lights-out:priority = 100    # 數字越小越優先（啟動先/關閉後）
 **Error handling:** 單一資源失敗不中斷整體流程（fail-fast: false）
 
 **Commits:** `<type>(<scope>): <description>`
+
 - type: `feat|fix|docs|refactor|test`
 - scope: `core|discovery|handlers|config|infra`
 
 ## AI Agent Rules
 
 **CRITICAL - DO NOT AUTO-EXECUTE:**
+
 - ❌ **NEVER** 自動執行 `npm test` 或任何測試指令
 - ❌ **NEVER** 自動執行 `npm run deploy`
 - ❌ **NEVER** 自動執行 `aws lambda invoke`

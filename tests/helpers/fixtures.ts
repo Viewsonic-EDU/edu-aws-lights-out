@@ -66,7 +66,7 @@ export function createMockConfig(overrides: Partial<Config> = {}): Config {
         stable_timeout_seconds: 300,
         default_desired_count: 1,
       },
-      "rds-instance": {
+      "rds-db": {
         wait_for_stable: false,
         stable_timeout_seconds: 600,
       },
@@ -79,7 +79,7 @@ export function createMockConfig(overrides: Partial<Config> = {}): Config {
 /**
  * Creates a mock DiscoveredResource.
  *
- * @param resourceType - Type of resource (e.g., "ecs-service", "rds-instance")
+ * @param resourceType - Type of resource (e.g., "ecs-service", "rds-db")
  * @param overrides - Optional overrides for specific properties
  * @returns Mock DiscoveredResource
  */
@@ -93,7 +93,7 @@ export function createMockResource(
       resourceId: "test-cluster/test-service",
       metadata: { cluster_name: "test-cluster" },
     },
-    "rds-instance": {
+    "rds-db": {
       arn: "arn:aws:rds:us-east-1:123456:db:test-database",
       resourceId: "test-database",
       metadata: {},

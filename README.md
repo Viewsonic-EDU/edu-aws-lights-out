@@ -96,7 +96,7 @@ pnpm lint
 
 ## 📁 專案結構
 
-```
+```ini
 aws-lights-out-plan/
 ├── src/
 │   ├── index.ts                # Lambda handler 入口
@@ -109,8 +109,8 @@ aws-lights-out-plan/
 │   │   └── tag-discovery.ts    # Tag-based 資源發現
 │   ├── handlers/
 │   │   ├── base.ts             # ResourceHandler 介面
-│   │   ├── ecs-service.ts      # ECS Service Handler
-│   │   └── rds-instance.ts     # RDS Instance Handler
+│   │   ├── ecsService.ts      # ECS Service Handler
+│   │   └── rdsInstance.ts     # RDS Instance Handler
 │   └── utils/
 │       └── logger.ts           # Pino 結構化 logging
 │
@@ -131,6 +131,7 @@ aws-lights-out-plan/
 ```
 
 **Why this structure:**
+
 - `handlers/` 模組化：實作 `ResourceHandler` 介面新增資源類型
 - `discovery/` 抽象化：配置與程式碼分離，資源清單動態發現
 - `core/` 業務邏輯：可注入 mock clients，方便單元測試
@@ -142,7 +143,7 @@ aws-lights-out-plan/
 
 所有需要管理的資源**必須**具備以下標籤：
 
-```
+```ini
 lights-out:managed  = true              # 是否納管
 lights-out:env      = workshop          # 環境名稱 (workshop/dev/staging)
 lights-out:priority = 100               # 優先級（數字越小越先啟動/越後關閉）
@@ -150,6 +151,7 @@ lights-out:schedule = default           # 排程群組（可選）
 ```
 
 **範例:**
+
 ```bash
 # ECS Service 標籤
 aws ecs tag-resource \
@@ -233,7 +235,7 @@ aws lambda invoke \
 
 ### Commit 規範
 
-```
+```html
 <type>(<scope>): <description>
 
 type: feat|fix|docs|refactor|test|chore
@@ -241,6 +243,7 @@ scope: core|discovery|handlers|config|infra|docs
 ```
 
 **範例:**
+
 ```bash
 git commit -m "feat(handlers): implement RDS instance handler"
 git commit -m "test(core): add scheduler timezone tests"
