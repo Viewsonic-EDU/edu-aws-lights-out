@@ -19,11 +19,10 @@ resource_defaults:
     autoScaling:
       minCapacity: 2
       maxCapacity: 6
-      desiredCount: 3 
-    defaultDesiredCount: 3
+      desiredCount: 2
+    defaultDesiredCount: 2
     stopBehavior:
-      mode: reduce_by_count
-      reduceByCount: 1
+      mode: scale_to_zero
 
 schedules:
   default:
