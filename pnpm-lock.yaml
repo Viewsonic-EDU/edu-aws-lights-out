@@ -11,6 +11,9 @@ importers:
       '@aws-sdk/client-ecs':
         specifier: ^3.954.0
         version: 3.958.0
+      '@aws-sdk/client-lambda':
+        specifier: ^3.954.0
+        version: 3.958.0
       '@aws-sdk/client-rds':
         specifier: ^3.954.0
         version: 3.958.0
@@ -60,6 +63,9 @@ importers:
       serverless:
         specifier: ^3.39.0
         version: 3.40.0(@types/node@25.0.3)
+      serverless-better-credentials:
+        specifier: ^2.0.1
+        version: 2.0.1(@serverless/utils@6.15.0(@types/node@25.0.3))(aws-sdk@2.1693.0)(serverless@3.40.0(@types/node@25.0.3))
       serverless-esbuild:
         specifier: ^1.57.0
         version: 1.57.0(esbuild@0.27.2)
@@ -2731,6 +2737,14 @@ packages:
     resolution: {integrity: sha512-SdsKMrI9TdgjdweUSR9MweHA4EJ8YxHn8DFaDisvhVlUOe4BF1tLD7GAj0lIqWVl+dPb/rExr0Btby5loQm20Q==}
     engines: {node: '>=10'}
     hasBin: true
+
+  serverless-better-credentials@2.0.1:
+    resolution: {integrity: sha512-CKRb+zP8HwThk2nD1t7kNHXn2bTYuPqaGvOnJ+PQq65wvJrLXbid6zZeSeaN506VpUp7zkOXgH8Qs3XGtK8dVA==}
+    engines: {node: '>=12'}
+    peerDependencies:
+      '@serverless/utils': ^6.0.2
+      aws-sdk: ^2.567.0
+      serverless: ^2 || ^3
 
   serverless-esbuild@1.57.0:
     resolution: {integrity: sha512-oKsqUkIPPE9hku81QhGi9p3Als6bmXKufCQeYjvjCT4rU3GDJ61WOG8psb8Ys6hw1vEiMbcUgnh+xLt1Scoaow==}
@@ -7031,6 +7045,13 @@ snapshots:
   semver@5.7.2: {}
 
   semver@7.7.3: {}
+
+  serverless-better-credentials@2.0.1(@serverless/utils@6.15.0(@types/node@25.0.3))(aws-sdk@2.1693.0)(serverless@3.40.0(@types/node@25.0.3)):
+    dependencies:
+      '@serverless/utils': 6.15.0(@types/node@25.0.3)
+      aws-sdk: 2.1693.0
+      open: 8.4.2
+      serverless: 3.40.0(@types/node@25.0.3)
 
   serverless-esbuild@1.57.0(esbuild@0.27.2):
     dependencies:

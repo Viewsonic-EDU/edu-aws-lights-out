@@ -2,7 +2,7 @@ service: lights-out
 
 provider:
   name: aws
-  region: ap-southeast-1
+  region: ${opt:region}
   stage: ${opt:stage}
   runtime: nodejs20.x  # TODO: upgrade to 22.x
 
@@ -51,22 +51,21 @@ functions:
       project: lights-out
       managed-by: serverless
     events:
-      # Start resources at 9:00 AM Taipei time (01:00 UTC)
+      # Dynamic schedules loaded from config file
       - schedule:
           name: ${self:service}-${self:provider.stage}-start
-          description: Start resources at 9:00 AM Asia/Taipei
-          rate: cron(0 1 ? * MON-FRI *)
+          description: ${file(config/${self:custom.configPath}):schedules_cron.start.description}
+          rate: cron(${file(config/${self:custom.configPath}):schedules_cron.start.expression})
           input:
             action: start
-          enabled: true
-      # Stop resources at 7:00 PM Taipei time (11:00 UTC)
+          enabled: ${file(config/${self:custom.configPath}):schedules_cron.start.enabled}
       - schedule:
           name: ${self:service}-${self:provider.stage}-stop
-          description: Stop resources at 7:00 PM Asia/Taipei
-          rate: cron(0 11 ? * MON-FRI *)
+          description: ${file(config/${self:custom.configPath}):schedules_cron.stop.description}
+          rate: cron(${file(config/${self:custom.configPath}):schedules_cron.stop.expression})
           input:
             action: stop
-          enabled: true
+          enabled: ${file(config/${self:custom.configPath}):schedules_cron.stop.enabled}
 
 custom:
   esbuild:
@@ -74,7 +73,7 @@ custom:
     minify: true
     sourcemap: true
     external: []
-    target: node20
+    target: node20 #TODO upgrade to node22
     platform: node
 
   # Config file path resolver for multi-project support
