@@ -11,9 +11,12 @@
 - [x] Phase 1.1: Python 原型實作（已移除）
 - [x] Phase 1.2: TypeScript 完整實作（完成）
 - [x] Phase 1.2.1: 移除 Python 實作，統一使用 TypeScript
-- [ ] Phase 1.3: AWS 環境設定與部署
+- [x] Phase 1.3: AWS 環境設定與部署（sss-lab account - 完成）
+- [x] Phase 1.4: 排程與驗證（EventBridge + 手動觸發 - 完成）
 - [ ] Phase 2: 更多資源類型支援
 - [ ] Phase 3: MCP 整合
+
+**Phase 1 已全部完成（2025-12-29）**
 
 ### Active Decisions
 | 決策 | 選擇 | 理由 | 日期 |
@@ -26,6 +29,8 @@
 | Phase 1 範圍 | ECS + RDS | 涵蓋常用資源類型 | 2025-12-23 |
 | Python 移除 | 2025-12-24 | 統一使用 TypeScript | 2025-12-24 |
 | 實作方式 | TDD + TypeScript Strict | 確保程式碼品質與型別安全 | 2025-12-23 |
+| 首次部署 | sss-lab account | PoC 環境驗證 | 2025-12-29 |
+| 排程時間 | 09:00-19:00 TPE | 週一至五工作時間 | 2025-12-29 |
 
 ### Blockers
 <!-- Agent 遇到阻礙時在此記錄 -->
@@ -63,15 +68,15 @@ Python 原型實作已完成階段性任務並移除，專案統一使用 TypeSc
 | TS-12 | Serverless Framework | ✅ | Claude | serverless.yml + esbuild |
 | TS-13 | 測試 | ✅ | Claude | 307 個測試檔案 |
 
-#### 部署與驗證 (待開始)
+#### 部署與驗證 (已完成 - 2025-12-29)
 | ID | Task | Status | Agent | Notes |
 |----|------|--------|-------|-------|
-| D-01 | 建立 IAM Role | 🔲 | - | 支援 ECS + RDS 權限 |
-| D-02 | 建立 SSM Parameter | 🔲 | - | YAML 格式配置 |
-| D-03 | 為資源加標籤 | 🔲 | - | lights-out:* tags |
-| D-04 | 部署 Lambda | 🔲 | - | 使用 Serverless Framework |
-| D-05 | 建立 EventBridge | 🔲 | - | start/stop cron rules |
-| D-06 | Workshop 驗證 | 🔲 | - | 端對端測試 |
+| D-01 | 建立 IAM Role | ✅ | Serverless | 自動建立（含 ECS + RDS + SSM 權限） |
+| D-02 | 建立 SSM Parameter | ✅ | DevOps | /lights-out/config（手動創建） |
+| D-03 | 為資源加標籤 | ✅ | DevOps | sss-lab 資源已標記 lights-out:* tags |
+| D-04 | 部署 Lambda | ✅ | DevOps | Serverless Framework v3.39.0 部署成功 |
+| D-05 | 建立 EventBridge | ✅ | Serverless | start/stop cron rules 已建立 |
+| D-06 | sss-lab 驗證 | ✅ | DevOps | 端對端測試（手動 + 排程觸發）全部通過 |
 
 **Status:** 🔲 Todo | 🔄 In Progress | ✅ Done | ⏸️ Blocked
 

@@ -274,9 +274,26 @@ git commit -m "docs(deployment): update Lambda IAM requirements"
 - [x] Phase 0: 專案初始化（文件規劃）
 - [x] Phase 1.1: Python 原型實作（已移除）
 - [x] Phase 1.2: TypeScript 完整實作（ECS + RDS Handler）
-- [ ] Phase 1.3: AWS 環境設定與部署
+- [x] Phase 1.3: AWS 環境設定與部署（sss-lab account）
+- [x] Phase 1.4: 排程與驗證（EventBridge + 手動觸發測試）
 - [ ] Phase 2: 更多資源類型支援（NAT Gateway、Lambda 等）
 - [ ] Phase 3: MCP 整合
+
+### Phase 1 部署成果（2025-12-29）
+
+**部署環境:** sss-lab AWS Account (091947912308)
+**Lambda 函數:** lights-out-sss-lab-handler
+**排程規則:**
+- 每週一至五 09:00 TPE 自動啟動資源
+- 每週一至五 19:00 TPE 自動停止資源
+
+**驗證完成項目:**
+- ✅ Lambda Function 部署與 IAM 權限配置
+- ✅ SSM Parameter Store 配置管理
+- ✅ 資源標籤（ECS Service + RDS Instance）
+- ✅ 手動觸發測試（discover/status/stop/start actions）
+- ✅ EventBridge 排程規則自動觸發
+- ✅ Dry-run 模式驗證
 
 ### 技術決策
 
@@ -289,6 +306,8 @@ git commit -m "docs(deployment): update Lambda IAM requirements"
 | 測試框架 | Vitest | 現代化、快速、原生 ESM 支援 | 2025-12-23 |
 | Phase 1 範圍 | ECS + RDS | 涵蓋常用資源類型 | 2025-12-23 |
 | Python 移除 | 2025-12-24 | 統一使用 TypeScript | 2025-12-24 |
+| 首次部署環境 | sss-lab | PoC 驗證環境 | 2025-12-29 |
+| EventBridge 排程 | 09:00-19:00 TPE | 週一至五自動啟停 | 2025-12-29 |
 
 ---
 

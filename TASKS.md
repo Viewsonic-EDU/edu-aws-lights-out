@@ -8,8 +8,8 @@
 |-------|-----------|--------|----------|
 | Phase 1 | TypeScript 實作 | ✅ 完成 | 100% |
 | Phase 1 | Python 原型 | ✅ 已移除 | - |
-| Phase 1 | AWS 設定與部署 | 🔲 待開始 | 0% |
-| Phase 1 | 排程與驗證 | 🔲 待開始 | 0% |
+| Phase 1 | AWS 設定與部署 | ✅ 完成 | 100% |
+| Phase 1 | 排程與驗證 | ✅ 完成 | 100% |
 | Phase 2 | 更多資源類型 | 🔲 未排程 | - |
 | Phase 3 | MCP 整合 | 🔲 未排程 | - |
 
@@ -48,7 +48,7 @@ src/
 
 Python 原型實作已完成階段性任務並移除，專案統一使用 TypeScript 實作。此階段驗證了核心架構設計的可行性。
 
-**下一步**: 準備 AWS 環境設定與部署
+**下一步**: Phase 1 已全部完成。可開始規劃 Phase 2（更多資源類型支援）或 Phase 3（MCP 整合）
 
 ---
 
@@ -78,28 +78,32 @@ Python 原型實作已完成並移除（2025-12-24）。此階段驗證了核心
 | TypeScript strict mode 驗證 | Claude | ✅ | 全部模組通過 strict 檢查 + Zod validation |
 | 移除 Python 實作 | Claude | ✅ | 統一使用 TypeScript（2025-12-24） |
 
-### Milestone 1.3: AWS 設定與部署 (待開始)
+### Milestone 1.3: AWS 設定與部署 ✅ **COMPLETED**
+
+完成日期: 2025-12-29
 
 | Task | Owner | Status | Notes |
 |------|-------|--------|-------|
-| 建立 IAM Role | - | 🔲 | 見 AGENTS.md IAM 規格（需支援 ECS + RDS） |
-| 建立 SSM Parameter | - | 🔲 | /lights-out/{env}/config（YAML 格式） |
-| 為資源加標籤 | - | 🔲 | lights-out:* tags，參考 docs/tagging-guide.md |
-| 部署 Lambda Function | - | 🔲 | 使用 Serverless Framework 部署 |
-| 測試 discover action | - | 🔲 | 驗證資源發現功能（ECS + RDS） |
-| 測試 status action | - | 🔲 | 手動 invoke |
-| 測試 stop action | - | 🔲 | 驗證 ECS desiredCount=0 + RDS stop |
-| 測試 start action | - | 🔲 | 驗證 ECS 恢復 + RDS start |
+| 建立 IAM Role | DevOps | ✅ | Serverless Framework 自動建立（含 ECS + RDS 權限） |
+| 建立 SSM Parameter | DevOps | ✅ | /lights-out/config（手動創建，YAML 轉 JSON） |
+| 為資源加標籤 | DevOps | ✅ | 已標記 sss-lab 環境資源 |
+| 部署 Lambda Function | DevOps | ✅ | 使用 Serverless Framework v3.39.0 部署至 sss-lab |
+| 測試 discover action | DevOps | ✅ | 驗證資源發現功能（aws lambda invoke） |
+| 測試 status action | DevOps | ✅ | 手動 invoke 驗證成功 |
+| 測試 stop action | DevOps | ✅ | 驗證 ECS desiredCount=0 + RDS stop（含 dry-run） |
+| 測試 start action | DevOps | ✅ | 驗證 ECS 恢復 + RDS start（含 dry-run） |
 
-### Milestone 1.4: 排程與驗證 (待開始)
+### Milestone 1.4: 排程與驗證 ✅ **COMPLETED**
+
+完成日期: 2025-12-29
 
 | Task | Owner | Status | Notes |
 |------|-------|--------|-------|
-| 建立 EventBridge Rule (stop) | - | 🔲 | cron(0 11 ? * MON-FRI *) |
-| 建立 EventBridge Rule (start) | - | 🔲 | cron(0 1 ? * MON-FRI *) |
-| 端到端測試 (stop) | - | 🔲 | 確認 ECS + RDS 關閉 |
-| 端到端測試 (start) | - | 🔲 | 確認 ECS + RDS 啟動 |
-| 文件更新 | - | 🔲 | 更新 deployment-guide.md 與 ops guide |
+| 建立 EventBridge Rule (stop) | DevOps | ✅ | cron(0 11 ? * MON-FRI *) - 每日 19:00 TPE 停止資源 |
+| 建立 EventBridge Rule (start) | DevOps | ✅ | cron(0 1 ? * MON-FRI *) - 每日 09:00 TPE 啟動資源 |
+| 端到端測試 (stop) | DevOps | ✅ | 確認 ECS + RDS 正常關閉 |
+| 端到端測試 (start) | DevOps | ✅ | 確認 ECS + RDS 正常啟動 |
+| 文件更新 | DevOps | ✅ | 已更新 deployment-guide.md 與相關文件 |
 
 ---
 
