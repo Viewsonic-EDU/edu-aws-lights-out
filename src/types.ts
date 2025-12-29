@@ -101,6 +101,60 @@ export interface HandlerResult {
 }
 
 /**
+ * ECS Service stop behavior configuration.
+ *
+ * Defines how ECS services should be scaled down during stop operations.
+ */
+export interface ECSStopBehavior {
+  /**
+   * Stop mode strategy:
+   * - scale_to_zero: Set desiredCount to 0 (default, backward compatible)
+   * - reduce_by_count: Reduce current desiredCount by a specific amount
+   * - reduce_to_count: Set desiredCount to a specific target value
+   */
+  mode: "scale_to_zero" | "reduce_by_count" | "reduce_to_count";
+
+  /**
+   * Amount to reduce when mode is "reduce_by_count".
+   * Example: If current is 3 and reduceByCount is 1, target will be 2.
+   */
+  reduceByCount?: number;
+
+  /**
+   * Target count when mode is "reduce_to_count".
+   * Example: If reduceToCount is 1, service will always scale to 1.
+   */
+  reduceToCount?: number;
+}
+
+/**
+ * ECS Service resource defaults configuration.
+ *
+ * Defines default behavior for all ECS service operations.
+ */
+export interface ECSResourceDefaults {
+  /**
+   * Whether to wait for service to stabilize after operations.
+   */
+  waitForStable?: boolean;
+
+  /**
+   * Maximum seconds to wait for stabilization (default: 300).
+   */
+  stableTimeoutSeconds?: number;
+
+  /**
+   * Target desiredCount when starting services (default: 1).
+   */
+  defaultDesiredCount?: number;
+
+  /**
+   * Stop behavior configuration for flexible scaling strategies.
+   */
+  stopBehavior?: ECSStopBehavior;
+}
+
+/**
  * Configuration from SSM Parameter Store.
  */
 export interface Config {

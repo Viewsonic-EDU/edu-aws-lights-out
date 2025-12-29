@@ -15,6 +15,30 @@ import { setupLogger } from "@utils/logger";
 const logger = setupLogger("lights-out:config");
 
 /**
+ * ECS Stop Behavior schema validation.
+ *
+ * Validates the stopBehavior configuration for ECS services.
+ */
+const ECSStopBehaviorSchema = z.object({
+  mode: z.enum(["scale_to_zero", "reduce_by_count", "reduce_to_count"]),
+  reduceByCount: z.number().int().positive().optional(),
+  reduceToCount: z.number().int().nonnegative().optional(),
+}).refine(
+  (data) => {
+    if (data.mode === "reduce_by_count") {
+      return data.reduceByCount !== undefined;
+    }
+    if (data.mode === "reduce_to_count") {
+      return data.reduceToCount !== undefined;
+    }
+    return true;
+  },
+  {
+    message: "reduceByCount required for reduce_by_count mode, reduceToCount required for reduce_to_count mode"
+  }
+);
+
+/**
  * Configuration schema validation using Zod.
  *
  * Ensures the loaded config has all required fields with proper types.
@@ -31,7 +55,9 @@ const ConfigSchema = z.object({
   settings: z.object({
     schedule_tag: z.string().optional(),
   }).passthrough().optional(),
-  resource_defaults: z.record(z.record(z.unknown())).optional(),
+  resource_defaults: z.record(z.object({
+    stopBehavior: ECSStopBehaviorSchema.optional(),
+  }).passthrough()).optional(),
 }).passthrough();
 
 /**

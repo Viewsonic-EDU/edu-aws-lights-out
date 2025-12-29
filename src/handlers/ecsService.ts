@@ -17,6 +17,7 @@ import type {
   Config,
   HandlerResult,
   ResourceHandler,
+  ECSStopBehavior,
 } from "@/types";
 import { setupLogger } from "@utils/logger";
 import { getResourceDefaults } from "@handlers/base";
@@ -134,31 +135,71 @@ export class ECSServiceHandler implements ResourceHandler {
         "Attempting to stop service"
       );
 
-      // 2. Idempotent check - already stopped
-      if (currentStatus.is_stopped) {
+      // 2. Extract stop behavior from config
+      const defaults = getResourceDefaults(
+        this.config,
+        this.resource.resourceType
+      );
+      const stopBehavior = (defaults.stopBehavior as ECSStopBehavior) ?? {
+        mode: "scale_to_zero" // Default for backward compatibility
+      };
+
+      // 3. Calculate target count based on mode
+      let targetCount: number;
+      switch (stopBehavior.mode) {
+        case "scale_to_zero":
+          targetCount = 0;
+          break;
+        case "reduce_by_count":
+          targetCount = Math.max(
+            0,
+            (currentStatus.desired_count as number) - (stopBehavior.reduceByCount ?? 1)
+          );
+          break;
+        case "reduce_to_count":
+          targetCount = stopBehavior.reduceToCount ?? 0;
+          break;
+        default:
+          targetCount = 0;
+      }
+
+      this.logger.info(
+        {
+          cluster: this.clusterName,
+          service: this.serviceName,
+          current: currentStatus.desired_count,
+          target: targetCount,
+          mode: stopBehavior.mode,
+        },
+        "Calculated target count for stop operation"
+      );
+
+      // 4. Idempotent check - already at target count
+      if (currentStatus.desired_count === targetCount) {
         this.logger.info(
           {
             cluster: this.clusterName,
             service: this.serviceName,
+            target: targetCount,
           },
-          "Service already stopped"
+          "Service already at target count"
         );
         return {
           success: true,
           action: "stop",
           resourceType: this.resource.resourceType,
           resourceId: this.resource.resourceId,
-          message: "Service already stopped",
+          message: `Service already at target count ${targetCount}`,
           previousState: currentStatus,
         };
       }
 
-      // 3. Update service to stop (desiredCount=0)
+      // 5. Update service to target count
       await this.ecsClient.send(
         new UpdateServiceCommand({
           cluster: this.clusterName,
           service: this.serviceName,
-          desiredCount: 0,
+          desiredCount: targetCount,
         })
       );
 
@@ -167,15 +208,12 @@ export class ECSServiceHandler implements ResourceHandler {
           cluster: this.clusterName,
           service: this.serviceName,
           previous_count: currentStatus.desired_count,
+          target_count: targetCount,
         },
-        "Updated service desiredCount to 0"
+        `Updated service desiredCount to ${targetCount}`
       );
 
-      // 4. Wait for stable if configured
-      const defaults = getResourceDefaults(
-        this.config,
-        this.resource.resourceType
-      );
+      // 6. Wait for stable if configured
       if (defaults.wait_for_stable) {
         const timeout = (defaults.stable_timeout_seconds as number) ?? 300;
         this.logger.info(
@@ -194,7 +232,7 @@ export class ECSServiceHandler implements ResourceHandler {
         action: "stop",
         resourceType: this.resource.resourceType,
         resourceId: this.resource.resourceId,
-        message: `Service scaled to 0 (was ${currentStatus.desired_count})`,
+        message: `Service scaled to ${targetCount} (was ${currentStatus.desired_count})`,
         previousState: currentStatus,
       };
     } catch (error) {
