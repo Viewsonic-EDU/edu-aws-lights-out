@@ -165,6 +165,7 @@ export class ECSServiceHandler implements ResourceHandler {
 
       this.logger.info(
         {
+          ssmConfig: defaults,
           cluster: this.clusterName,
           service: this.serviceName,
           current: currentStatus.desired_count,
@@ -214,8 +215,8 @@ export class ECSServiceHandler implements ResourceHandler {
       );
 
       // 6. Wait for stable if configured
-      if (defaults.wait_for_stable) {
-        const timeout = (defaults.stable_timeout_seconds as number) ?? 300;
+      if (defaults.waitForStable) {
+        const timeout = (defaults.stableTimeoutSeconds as number) ?? 300;
         this.logger.info(
           {
             cluster: this.clusterName,
@@ -274,10 +275,11 @@ export class ECSServiceHandler implements ResourceHandler {
         this.config,
         this.resource.resourceType
       );
-      const targetCount = (defaults.default_desired_count as number) ?? 1;
+      const targetCount = (defaults.defaultDesiredCount as number) ?? 1;
 
       this.logger.info(
         {
+          ssmConfig: defaults,
           cluster: this.clusterName,
           service: this.serviceName,
           current_desired_count: currentStatus.desired_count,
@@ -325,8 +327,8 @@ export class ECSServiceHandler implements ResourceHandler {
       );
 
       // 5. Wait for stable if configured
-      if (defaults.wait_for_stable) {
-        const timeout = (defaults.stable_timeout_seconds as number) ?? 300;
+      if (defaults.waitForStable) {
+        const timeout = (defaults.stableTimeoutSeconds as number) ?? 300;
         this.logger.info(
           {
             cluster: this.clusterName,
