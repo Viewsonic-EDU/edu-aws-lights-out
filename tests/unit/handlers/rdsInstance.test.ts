@@ -45,8 +45,8 @@ describe('RDSInstanceHandler', () => {
       },
       resource_defaults: {
         'rds-db': {
-          wait_for_stable: false, // Disable for faster tests
-          stable_timeout_seconds: 600,
+          waitForStable: false, // Disable for faster tests
+          stableTimeoutSeconds: 600,
         },
       },
     };
@@ -229,8 +229,8 @@ describe('RDSInstanceHandler', () => {
         ...sampleConfig,
         resource_defaults: {
           'rds-db': {
-            wait_for_stable: true,
-            stable_timeout_seconds: 40,
+            waitForStable: true,
+            stableTimeoutSeconds: 40,
           },
         },
       };
@@ -261,8 +261,8 @@ describe('RDSInstanceHandler', () => {
         ...sampleConfig,
         resource_defaults: {
           'rds-db': {
-            wait_for_stable: true,
-            stable_timeout_seconds: 5,
+            waitForStable: true,
+            stableTimeoutSeconds: 5,
           },
         },
       };
@@ -289,8 +289,8 @@ describe('RDSInstanceHandler', () => {
         ...sampleConfig,
         resource_defaults: {
           'rds-db': {
-            wait_for_stable: true,
-            stable_timeout_seconds: 5,
+            waitForStable: true,
+            stableTimeoutSeconds: 5,
           },
         },
       };
@@ -415,8 +415,8 @@ describe('RDSInstanceHandler', () => {
         ...sampleConfig,
         resource_defaults: {
           'rds-db': {
-            wait_for_stable: true,
-            stable_timeout_seconds: 40, // Must be > minDelay (30s)
+            waitForStable: true,
+            stableTimeoutSeconds: 40, // Must be > minDelay (30s)
           },
         },
       };

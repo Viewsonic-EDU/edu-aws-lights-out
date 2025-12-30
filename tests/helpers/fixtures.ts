@@ -62,13 +62,13 @@ export function createMockConfig(overrides: Partial<Config> = {}): Config {
     },
     resource_defaults: {
       "ecs-service": {
-        wait_for_stable: false,
-        stable_timeout_seconds: 300,
-        default_desired_count: 1,
+        waitForStable: false,
+        stableTimeoutSeconds: 300,
+        defaultDesiredCount: 1,
       },
       "rds-db": {
-        wait_for_stable: false,
-        stable_timeout_seconds: 600,
+        waitForStable: false,
+        stableTimeoutSeconds: 600,
       },
     },
   };
