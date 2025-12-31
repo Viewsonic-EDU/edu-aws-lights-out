@@ -16,13 +16,14 @@ resource_defaults:
   ecs-service:
     waitForStable: true
     stableTimeoutSeconds: 300
-    autoScaling:
+    start:
       minCapacity: 2
       maxCapacity: 6
       desiredCount: 2
-    defaultDesiredCount: 2
-    stopBehavior:
-      mode: scale_to_zero
+    stop:
+      minCapacity: 0
+      maxCapacity: 0
+      desiredCount: 0
 
 schedules:
   default:
@@ -39,10 +40,10 @@ schedules:
 
 schedules_cron:
   start:
-    expression: 0 0 ? * MON-FRI *  # 每週一至五 08:00 TPE (00:00 UTC)
+    expression: 0 0 ? * MON-FRI * # 每週一至五 08:00 TPE (00:00 UTC)
     description: Start resources at 08:00 Asia/Taipei (00:00 UTC)
     enabled: true
   stop:
-    expression: 0 14 ? * MON-FRI *  # 每週一至五 22:00 TPE (14:00 UTC)
+    expression: 0 14 ? * MON-FRI * # 每週一至五 22:00 TPE (14:00 UTC)
     description: Stop resources at 22:00 Asia/Taipei (14:00 UTC)
     enabled: true

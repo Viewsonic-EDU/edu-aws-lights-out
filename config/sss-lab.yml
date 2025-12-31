@@ -18,7 +18,10 @@ resource_defaults:
   ecs-service:
     waitForStable: true
     stableTimeoutSeconds: 300
-    defaultDesiredCount: 1
+    start:
+      desiredCount: 1
+    stop:
+      desiredCount: 0
   rds-db:
     skipFinalSnapshot: true
     waitTimeout: 600
@@ -38,10 +41,10 @@ schedules:
 
 schedules_cron:
   start:
-    expression: 0 1 ? * MON-FRI *  # 每週一至五 09:00 TPE (01:00 UTC)
+    expression: 0 1 ? * MON-FRI * # 每週一至五 09:00 TPE (01:00 UTC)
     description: Start resources at 09:00 Asia/Taipei (01:00 UTC)
     enabled: true
   stop:
-    expression: 0 11 ? * MON-FRI *  # 每週一至五 19:00 TPE (11:00 UTC)
+    expression: 0 11 ? * MON-FRI * # 每週一至五 19:00 TPE (11:00 UTC)
     description: Stop resources at 19:00 Asia/Taipei (11:00 UTC)
     enabled: true

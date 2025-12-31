@@ -15,50 +15,33 @@ import { setupLogger } from '@utils/logger';
 const logger = setupLogger('lights-out:config');
 
 /**
- * ECS Stop Behavior schema validation.
+ * ECS Action Config schema validation.
  *
- * Validates the stopBehavior configuration for ECS services.
+ * Validates the unified start/stop configuration for ECS services.
+ * Supports two modes:
+ * 1. Auto Scaling mode: with minCapacity and maxCapacity
+ * 2. Direct mode: with only desiredCount
  */
-const ECSStopBehaviorSchema = z
-  .object({
-    mode: z.enum(['scale_to_zero', 'reduce_by_count', 'reduce_to_count']),
-    reduceByCount: z.number().int().positive().optional(),
-    reduceToCount: z.number().int().nonnegative().optional(),
-  })
-  .refine(
-    (data) => {
-      if (data.mode === 'reduce_by_count') {
-        return data.reduceByCount !== undefined;
-      }
-      if (data.mode === 'reduce_to_count') {
-        return data.reduceToCount !== undefined;
-      }
-      return true;
-    },
-    {
-      message:
-        'reduceByCount required for reduce_by_count mode, reduceToCount required for reduce_to_count mode',
-    }
-  );
-
-/**
- * ECS Auto Scaling schema validation.
- *
- * Validates the autoScaling configuration for ECS services.
- */
-const ECSAutoScalingSchema = z
-  .object({
-    minCapacity: z.number().int().nonnegative(),
-    maxCapacity: z.number().int().positive(),
+const ECSActionConfigSchema = z.union([
+  // Auto Scaling mode
+  z
+    .object({
+      minCapacity: z.number().int().nonnegative(),
+      maxCapacity: z.number().int().positive(),
+      desiredCount: z.number().int().nonnegative(),
+    })
+    .refine((data) => data.minCapacity <= data.maxCapacity, {
+      message: 'minCapacity must be <= maxCapacity',
+    })
+    .refine(
+      (data) => data.desiredCount >= data.minCapacity && data.desiredCount <= data.maxCapacity,
+      { message: 'desiredCount must be between minCapacity and maxCapacity' }
+    ),
+  // Direct mode
+  z.object({
     desiredCount: z.number().int().nonnegative(),
-  })
-  .refine((data) => data.minCapacity <= data.maxCapacity, {
-    message: 'minCapacity must be <= maxCapacity',
-  })
-  .refine(
-    (data) => data.desiredCount >= data.minCapacity && data.desiredCount <= data.maxCapacity,
-    { message: 'desiredCount must be between minCapacity and maxCapacity' }
-  );
+  }),
+]);
 
 /**
  * Configuration schema validation using Zod.
@@ -87,8 +70,11 @@ const ConfigSchema = z
       .record(
         z
           .object({
-            stopBehavior: ECSStopBehaviorSchema.optional(),
-            autoScaling: ECSAutoScalingSchema.optional(),
+            // ECS service fields (validated if present)
+            waitForStable: z.boolean().optional(),
+            stableTimeoutSeconds: z.number().int().positive().optional(),
+            start: ECSActionConfigSchema.optional(),
+            stop: ECSActionConfigSchema.optional(),
           })
           .passthrough()
       )
