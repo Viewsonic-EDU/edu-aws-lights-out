@@ -4,13 +4,13 @@
  * Provides domain-specific assertions for common test scenarios.
  */
 
-import { expect } from "vitest";
+import { expect } from 'vitest';
 import type {
   HandlerResult,
   OrchestrationResult,
   LambdaExecutionResult,
   DiscoveryResult,
-} from "@/types";
+} from '@/types';
 
 /**
  * Asserts that a HandlerResult represents a successful operation.
@@ -90,7 +90,7 @@ export function assertLambdaResponse(
   expect(response.body).toBeDefined();
 
   // Ensure body is valid JSON
-  expect(() => JSON.parse(response.body)).not.toThrow();
+  expect(() => JSON.parse(response.body) as unknown).not.toThrow();
 }
 
 /**
@@ -114,10 +114,7 @@ export function assertResponseFields(
  * @param result - Lambda execution result
  * @param action - Expected action
  */
-export function assertValidExecutionResult(
-  result: LambdaExecutionResult,
-  action: string
-): void {
+export function assertValidExecutionResult(result: LambdaExecutionResult, action: string): void {
   expect(result.action).toBe(action);
   expect(result.total).toBeGreaterThanOrEqual(0);
   expect(result.succeeded).toBeGreaterThanOrEqual(0);
@@ -137,7 +134,7 @@ export function assertValidExecutionResult(
  * @param result - Discovery result
  */
 export function assertValidDiscoveryResult(result: DiscoveryResult): void {
-  expect(result.action).toBe("discover");
+  expect(result.action).toBe('discover');
   expect(result.discovered_count).toBeGreaterThanOrEqual(0);
   expect(result.resources).toHaveLength(result.discovered_count);
   expect(result.timestamp).toBeDefined();
@@ -163,9 +160,9 @@ export function assertErrorResponse(
   responseBody: Record<string, unknown>,
   expectedErrorSubstring?: string
 ): void {
-  expect(responseBody).toHaveProperty("error");
-  expect(responseBody).toHaveProperty("timestamp");
-  expect(responseBody).toHaveProperty("request_id");
+  expect(responseBody).toHaveProperty('error');
+  expect(responseBody).toHaveProperty('timestamp');
+  expect(responseBody).toHaveProperty('request_id');
 
   if (expectedErrorSubstring) {
     expect(String(responseBody.error)).toContain(expectedErrorSubstring);

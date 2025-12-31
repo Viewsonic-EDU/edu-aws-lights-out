@@ -16,6 +16,11 @@ import {
 import { RDSInstanceHandler } from '@handlers/rdsInstance';
 import type { DiscoveredResource, Config } from '@/types';
 
+// Mock timers/promises to work with Vitest fake timers
+vi.mock('timers/promises', () => ({
+  setTimeout: (ms: number) => new Promise((resolve) => globalThis.setTimeout(resolve, ms)),
+}));
+
 const rdsMock = mockClient(RDSClient);
 
 describe('RDSInstanceHandler', () => {
@@ -87,7 +92,7 @@ describe('RDSInstanceHandler', () => {
         ...sampleResource,
         arn: '',
       };
-      
+
       const handler = new RDSInstanceHandler(resourceWithoutArn, sampleConfig);
       expect(handler).toBeDefined();
     });
@@ -168,9 +173,7 @@ describe('RDSInstanceHandler', () => {
 
       const handler = new RDSInstanceHandler(sampleResource, sampleConfig);
 
-      await expect(handler.getStatus()).rejects.toThrow(
-        'DB Instance test-database not found'
-      );
+      await expect(handler.getStatus()).rejects.toThrow('DB Instance test-database not found');
     });
 
     it('should call DescribeDBInstancesCommand with correct parameters', async () => {
@@ -235,19 +238,21 @@ describe('RDSInstanceHandler', () => {
         },
       };
 
-      rdsMock.on(DescribeDBInstancesCommand)
+      rdsMock
+        .on(DescribeDBInstancesCommand)
         .resolvesOnce({ DBInstances: [{ DBInstanceStatus: 'available' }] }) // Initial status
-        .resolvesOnce({ DBInstances: [{ DBInstanceStatus: 'stopping' }] })  // First poll
-        .resolves({ DBInstances: [{ DBInstanceStatus: 'stopped' }] });      // Second poll (success)
+        .resolvesOnce({ DBInstances: [{ DBInstanceStatus: 'stopping' }] }) // First poll
+        .resolves({ DBInstances: [{ DBInstanceStatus: 'stopped' }] }); // Second poll (success)
 
       rdsMock.on(StopDBInstanceCommand).resolves({
         DBInstance: { DBInstanceStatus: 'stopping' },
       });
 
       const handler = new RDSInstanceHandler(sampleResource, configWithWait);
-      
+
       const stopPromise = handler.stop();
-      await vi.advanceTimersByTimeAsync(30000);
+      // Run all timers until completion (polling interval is 30s, need at least one cycle)
+      await vi.runAllTimersAsync();
       const result = await stopPromise;
       vi.useRealTimers();
 
@@ -257,7 +262,7 @@ describe('RDSInstanceHandler', () => {
     });
 
     it('should wait for stopped state (immediate success)', async () => {
-         const configWithWait: Config = {
+      const configWithWait: Config = {
         ...sampleConfig,
         resource_defaults: {
           'rds-db': {
@@ -267,9 +272,10 @@ describe('RDSInstanceHandler', () => {
         },
       };
 
-      rdsMock.on(DescribeDBInstancesCommand)
+      rdsMock
+        .on(DescribeDBInstancesCommand)
         .resolvesOnce({ DBInstances: [{ DBInstanceStatus: 'available' }] }) // Initial status
-        .resolves({ DBInstances: [{ DBInstanceStatus: 'stopped' }] });      // First poll (success)
+        .resolves({ DBInstances: [{ DBInstanceStatus: 'stopped' }] }); // First poll (success)
 
       rdsMock.on(StopDBInstanceCommand).resolves({
         DBInstance: { DBInstanceStatus: 'stopping' },
@@ -283,9 +289,9 @@ describe('RDSInstanceHandler', () => {
       // Ensure DescribeDBInstancesCommand was called at least twice (initial + polling)
       expect(rdsMock.commandCalls(DescribeDBInstancesCommand).length).toBeGreaterThanOrEqual(2);
     });
-    
+
     it('should throw error if status becomes unexpected during stop wait', async () => {
-       const configWithWait: Config = {
+      const configWithWait: Config = {
         ...sampleConfig,
         resource_defaults: {
           'rds-db': {
@@ -295,9 +301,10 @@ describe('RDSInstanceHandler', () => {
         },
       };
 
-      rdsMock.on(DescribeDBInstancesCommand)
+      rdsMock
+        .on(DescribeDBInstancesCommand)
         .resolvesOnce({ DBInstances: [{ DBInstanceStatus: 'available' }] }) // Initial status
-        .resolves({ DBInstances: [{ DBInstanceStatus: 'available' }] });    // Unexpected status during stop
+        .resolves({ DBInstances: [{ DBInstanceStatus: 'available' }] }); // Unexpected status during stop
 
       rdsMock.on(StopDBInstanceCommand).resolves({
         DBInstance: { DBInstanceStatus: 'stopping' },
@@ -421,7 +428,8 @@ describe('RDSInstanceHandler', () => {
         },
       };
 
-      rdsMock.on(DescribeDBInstancesCommand)
+      rdsMock
+        .on(DescribeDBInstancesCommand)
         .resolvesOnce({ DBInstances: [{ DBInstanceStatus: 'stopped' }] })
         .resolves({ DBInstances: [{ DBInstanceStatus: 'available' }] });
 
@@ -495,11 +503,9 @@ describe('RDSInstanceHandler', () => {
     });
 
     it('should return failure result on error', async () => {
-      rdsMock
-        .on(DescribeDBInstancesCommand)
-        .resolves({
-          DBInstances: [{ DBInstanceStatus: 'stopped' }],
-        });
+      rdsMock.on(DescribeDBInstancesCommand).resolves({
+        DBInstances: [{ DBInstanceStatus: 'stopped' }],
+      });
 
       rdsMock.on(StartDBInstanceCommand).rejects(new Error('Permission denied'));
 

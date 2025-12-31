@@ -5,28 +5,19 @@
  * resource management, and returns responses.
  */
 
-import type { Context } from "aws-lambda";
-import type {
-  LambdaAction,
-  DiscoveryResult,
-  LambdaExecutionResult,
-} from "@/types";
-import { loadConfigFromSsm } from "@core/config";
-import { Orchestrator } from "@core/orchestrator";
-import { setupLogger } from "@utils/logger";
+import type { Context } from 'aws-lambda';
+import type { LambdaAction, DiscoveryResult, LambdaExecutionResult } from '@/types';
+import { loadConfigFromSsm } from '@core/config';
+import { Orchestrator } from '@core/orchestrator';
+import { setupLogger } from '@utils/logger';
 
-const logger = setupLogger("lights-out:main");
+const logger = setupLogger('lights-out:main');
 
 // Default SSM parameter name (can be overridden via environment variable)
-const DEFAULT_CONFIG_PARAMETER = "/lights-out/config";
+const DEFAULT_CONFIG_PARAMETER = '/lights-out/config';
 
 // Valid actions
-const VALID_ACTIONS: ReadonlySet<string> = new Set([
-  "start",
-  "stop",
-  "status",
-  "discover",
-]);
+const VALID_ACTIONS: ReadonlySet<string> = new Set(['start', 'stop', 'status', 'discover']);
 
 /**
  * Lambda event structure.
@@ -73,34 +64,37 @@ function validateAction(action: string): LambdaAction | null {
  *   "body": "{\"action\":\"stop\",\"total\":10,\"succeeded\":9,\"failed\":1,...}"
  * }
  */
-export async function main(
-  event: LambdaEvent,
-  context: Context
-): Promise<LambdaResponse> {
+export async function main(event: LambdaEvent, context: Context): Promise<LambdaResponse> {
   // Extract request ID and function name from context
-  const requestId = context.awsRequestId ?? "local-test";
-  const functionName = context.functionName ?? "lights-out";
+  const requestId = context.awsRequestId || 'local-test';
+  const functionName = context.functionName || 'lights-out';
 
   // Extract and validate action
-  const actionStr = event.action ?? "status";
+  const actionStr = event.action ?? 'status';
   const action = validateAction(actionStr);
 
-  logger.info({
-    action: actionStr,
-    requestId,
-    functionName,
-  }, "Lambda invoked");
+  logger.info(
+    {
+      action: actionStr,
+      requestId,
+      functionName,
+    },
+    'Lambda invoked'
+  );
 
   // Validate action
   if (!action) {
-    logger.warn({
-      validActions: Array.from(VALID_ACTIONS),
-    }, `Invalid action: ${actionStr}`);
+    logger.warn(
+      {
+        validActions: Array.from(VALID_ACTIONS),
+      },
+      `Invalid action: ${actionStr}`
+    );
 
     return {
       statusCode: 400,
       body: JSON.stringify({
-        error: `Invalid action '${actionStr}'. Valid actions: ${Array.from(VALID_ACTIONS).join(", ")}`,
+        error: `Invalid action '${actionStr}'. Valid actions: ${Array.from(VALID_ACTIONS).join(', ')}`,
         timestamp: new Date().toISOString(),
         request_id: requestId,
       }),
@@ -109,8 +103,7 @@ export async function main(
 
   try {
     // Load configuration from SSM
-    const configParameter =
-      process.env.CONFIG_PARAMETER_NAME ?? DEFAULT_CONFIG_PARAMETER;
+    const configParameter = process.env.CONFIG_PARAMETER_NAME ?? DEFAULT_CONFIG_PARAMETER;
     logger.info(`Loading config from SSM: ${configParameter}`);
 
     const config = await loadConfigFromSsm(configParameter);
@@ -119,12 +112,12 @@ export async function main(
     const orchestrator = new Orchestrator(config);
 
     // Execute action
-    if (action === "discover") {
+    if (action === 'discover') {
       // Discover action only lists resources without executing operations
       const resources = await orchestrator.discoverResources();
 
       const result: DiscoveryResult = {
-        action: "discover",
+        action: 'discover',
         discovered_count: resources.length,
         resources: resources.map((r) => ({
           resource_type: r.resourceType,
@@ -137,11 +130,14 @@ export async function main(
         request_id: requestId,
       };
 
-      logger.info({
-        action,
-        total: result.discovered_count,
-        requestId,
-      }, "Lambda execution completed successfully");
+      logger.info(
+        {
+          action,
+          total: result.discovered_count,
+          requestId,
+        },
+        'Lambda execution completed successfully'
+      );
 
       return {
         statusCode: 200,
@@ -161,13 +157,16 @@ export async function main(
         request_id: requestId,
       };
 
-      logger.info({
-        action,
-        total: result.total,
-        succeeded: result.succeeded,
-        failed: result.failed,
-        requestId,
-      }, "Lambda execution completed successfully");
+      logger.info(
+        {
+          action,
+          total: result.total,
+          succeeded: result.succeeded,
+          failed: result.failed,
+          requestId,
+        },
+        'Lambda execution completed successfully'
+      );
 
       return {
         statusCode: 200,
@@ -175,11 +174,14 @@ export async function main(
       };
     }
   } catch (error) {
-    logger.error({
-      action: actionStr,
-      error: String(error),
-      requestId,
-    }, "Lambda execution failed");
+    logger.error(
+      {
+        action: actionStr,
+        error: String(error),
+        requestId,
+      },
+      'Lambda execution failed'
+    );
 
     return {
       statusCode: 500,

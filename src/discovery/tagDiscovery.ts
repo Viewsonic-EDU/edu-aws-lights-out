@@ -9,18 +9,18 @@ import {
   ResourceGroupsTaggingAPIClient,
   GetResourcesCommand,
   type ResourceTagMapping,
-} from "@aws-sdk/client-resource-groups-tagging-api";
-import type { DiscoveredResource } from "@/types";
-import { setupLogger } from "@utils/logger";
+} from '@aws-sdk/client-resource-groups-tagging-api';
+import type { DiscoveredResource } from '@/types';
+import { setupLogger } from '@utils/logger';
 
-const logger = setupLogger("lights-out:tag-discovery");
+const logger = setupLogger('lights-out:tag-discovery');
 
 /**
  * Discovers AWS resources based on resource tags.
  */
 export class TagDiscovery {
   private static readonly DEFAULT_PRIORITY = 50;
-  private static readonly DEFAULT_GROUP = "default";
+  private static readonly DEFAULT_GROUP = 'default';
 
   private readonly tagFilters: Record<string, string>;
   private readonly resourceTypes: string[];
@@ -33,15 +33,11 @@ export class TagDiscovery {
    * @param resourceTypes - List of AWS resource types to scan (e.g., ['ecs:service'])
    * @param regions - List of AWS regions to scan (defaults to Lambda's deployment region)
    */
-  constructor(
-    tagFilters: Record<string, string>,
-    resourceTypes: string[],
-    regions: string[] = []
-  ) {
+  constructor(tagFilters: Record<string, string>, resourceTypes: string[], regions: string[] = []) {
     this.tagFilters = tagFilters;
     this.resourceTypes = resourceTypes;
     // If no regions specified, use the Lambda's deployment region
-    this.regions = regions.length > 0 ? regions : [process.env.AWS_REGION || "ap-southeast-1"];
+    this.regions = regions.length > 0 ? regions : [process.env.AWS_REGION || 'ap-southeast-1'];
   }
 
   /**
@@ -51,12 +47,10 @@ export class TagDiscovery {
    * @returns List of discovered resources with parsed metadata
    */
   async discover(): Promise<DiscoveredResource[]> {
-    logger.info(`Scanning ${this.regions.length} region(s): ${this.regions.join(", ")}`);
+    logger.info(`Scanning ${this.regions.length} region(s): ${this.regions.join(', ')}`);
 
     // Discover resources in all regions in parallel
-    const regionPromises = this.regions.map((region) =>
-      this.discoverInRegion(region)
-    );
+    const regionPromises = this.regions.map((region) => this.discoverInRegion(region));
 
     const regionResults = await Promise.all(regionPromises);
 
@@ -117,9 +111,7 @@ export class TagDiscovery {
    * @param resourceMap - Resource mapping object from GetResources API
    * @returns DiscoveredResource object with parsed information
    */
-  private processResourceMapping(
-    resourceMap: ResourceTagMapping
-  ): DiscoveredResource {
+  private processResourceMapping(resourceMap: ResourceTagMapping): DiscoveredResource {
     // Extract and transform tags
     const tags: Record<string, string> = {};
     for (const tag of resourceMap.Tags ?? []) {
@@ -131,8 +123,7 @@ export class TagDiscovery {
     const arn = resourceMap.ResourceARN!;
 
     // Extract and validate priority from tags
-    const priorityStr =
-      tags["lights-out:priority"] ?? String(TagDiscovery.DEFAULT_PRIORITY);
+    const priorityStr = tags['lights-out:priority'] ?? String(TagDiscovery.DEFAULT_PRIORITY);
     const parsedPriority = parseInt(priorityStr, 10);
     const priority = isNaN(parsedPriority)
       ? (logger.warn(
@@ -142,15 +133,12 @@ export class TagDiscovery {
         TagDiscovery.DEFAULT_PRIORITY)
       : parsedPriority;
 
-    const group = tags["lights-out:group"] ?? TagDiscovery.DEFAULT_GROUP;
+    const group = tags['lights-out:group'] ?? TagDiscovery.DEFAULT_GROUP;
 
     // Parse ARN to get resource type and ID
     const awsResourceType = TagDiscovery.extractResourceTypeFromArn(arn);
-    const [resourceId, metadata] = TagDiscovery.parseResourceIdAndMetadata(
-      arn,
-      awsResourceType
-    );
-    const internalResourceType = awsResourceType.replace(":", "-");
+    const [resourceId, metadata] = TagDiscovery.parseResourceIdAndMetadata(arn, awsResourceType);
+    const internalResourceType = awsResourceType.replace(':', '-');
 
     return {
       resourceType: internalResourceType,
@@ -178,9 +166,9 @@ export class TagDiscovery {
    * @returns Resource type in format "service:type"
    */
   private static extractResourceTypeFromArn(arn: string): string {
-    const parts = arn.split(":");
+    const parts = arn.split(':');
     if (parts.length < 6) {
-      return "unknown";
+      return 'unknown';
     }
 
     const service = parts[2]; // e.g., 'ecs', 'ec2', 'rds'
@@ -188,10 +176,10 @@ export class TagDiscovery {
 
     // Extract the resource type (first part before '/' or ':')
     let resourceType: string;
-    if (resourcePart.includes("/")) {
-      resourceType = resourcePart.split("/")[0];
-    } else if (resourcePart.includes(":")) {
-      resourceType = resourcePart.split(":")[0];
+    if (resourcePart.includes('/')) {
+      resourceType = resourcePart.split('/')[0];
+    } else if (resourcePart.includes(':')) {
+      resourceType = resourcePart.split(':')[0];
     } else {
       resourceType = resourcePart;
     }
@@ -220,7 +208,7 @@ export class TagDiscovery {
     arn: string,
     resourceType: string
   ): [string, Record<string, unknown>] {
-    const parts = arn.split(":");
+    const parts = arn.split(':');
     if (parts.length < 6) {
       // Malformed ARN, return as-is
       return [arn, {}];
@@ -229,10 +217,10 @@ export class TagDiscovery {
     const resourceIdPart = parts[parts.length - 1];
     const metadata: Record<string, unknown> = {};
 
-    if (resourceType === "ecs:service") {
+    if (resourceType === 'ecs:service') {
       // arn:aws:ecs:region:account-id:service/cluster-name/service-name
       // or arn:aws:ecs:region:account-id:service/service-name
-      const resourceParts = resourceIdPart.split("/");
+      const resourceParts = resourceIdPart.split('/');
 
       if (resourceParts.length >= 3) {
         // Format: service/cluster-name/service-name
@@ -243,28 +231,28 @@ export class TagDiscovery {
       } else if (resourceParts.length === 2) {
         // Format: service/service-name (no cluster)
         const serviceName = resourceParts[resourceParts.length - 1];
-        metadata.cluster_name = "default";
+        metadata.cluster_name = 'default';
         return [serviceName, metadata];
       } else {
         // Unexpected format
-        metadata.cluster_name = "default";
+        metadata.cluster_name = 'default';
         return [resourceIdPart, metadata];
       }
     }
 
-    if (resourceType === "ec2:instance") {
+    if (resourceType === 'ec2:instance') {
       // arn:aws:ec2:region:account-id:instance/i-12345
-      if (resourceIdPart.includes("/")) {
-        return [resourceIdPart.split("/").pop()!, {}];
+      if (resourceIdPart.includes('/')) {
+        return [resourceIdPart.split('/').pop()!, {}];
       }
       return [resourceIdPart, {}];
     }
 
-    if (resourceType === "rds:db" || resourceType === "rds:cluster") {
+    if (resourceType === 'rds:db' || resourceType === 'rds:cluster') {
       // arn:aws:rds:region:account-id:db:my-db-instance
       // arn:aws:rds:region:account-id:cluster:my-aurora-cluster
-      if (resourceIdPart.includes(":")) {
-        return [resourceIdPart.split(":").pop()!, {}];
+      if (resourceIdPart.includes(':')) {
+        return [resourceIdPart.split(':').pop()!, {}];
       }
       return [resourceIdPart, {}];
     }

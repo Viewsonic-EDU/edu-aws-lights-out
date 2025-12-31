@@ -1,0 +1,7 @@
+node_modules/
+dist/
+.serverless/
+coverage/
+*.min.js
+package-lock.json
+pnpm-lock.yaml

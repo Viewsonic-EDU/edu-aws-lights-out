@@ -23,17 +23,17 @@
 
 ## 🛠️ 技術棧
 
-| 類別 | 技術 |
-|------|------|
-| **Runtime** | TypeScript 5.9 + Node.js 20.x |
-| **Framework** | Serverless Framework + serverless-esbuild |
-| **Trigger** | EventBridge (Cron) |
-| **Config** | SSM Parameter Store (YAML) |
-| **Discovery** | Resource Groups Tagging API |
+| 類別                 | 技術                                                 |
+| -------------------- | ---------------------------------------------------- |
+| **Runtime**          | TypeScript 5.9 + Node.js 20.x                        |
+| **Framework**        | Serverless Framework + serverless-esbuild            |
+| **Trigger**          | EventBridge (Cron)                                   |
+| **Config**           | SSM Parameter Store (YAML)                           |
+| **Discovery**        | Resource Groups Tagging API                          |
 | **ECS Auto Scaling** | Application Auto Scaling API (conditional detection) |
-| **Testing** | Vitest + aws-sdk-client-mock |
-| **Logging** | Pino (JSON structured logs) |
-| **Validation** | Zod |
+| **Testing**          | Vitest + aws-sdk-client-mock                         |
+| **Logging**          | Pino (JSON structured logs)                          |
+| **Validation**       | Zod                                                  |
 
 ### 開發工具
 
@@ -69,7 +69,7 @@ pnpm --version
 pnpm tsc --version
 
 # 4. 型別檢查
-pnpm type-check
+pnpm type:check
 
 # 5. 執行測試
 pnpm test
@@ -88,7 +88,7 @@ pnpm test:watch
 pnpm test:coverage
 
 # 型別檢查
-pnpm type-check
+pnpm type:check
 
 # Linting
 pnpm lint
@@ -211,7 +211,7 @@ npm run deploy
 
 ```bash
 # 型別檢查
-npm run type-check
+npm run type:check
 
 # 執行測試
 npm test
@@ -237,10 +237,15 @@ npm run test:coverage
 ### Commit 規範
 
 ```html
-<type>(<scope>): <description>
-
-type: feat|fix|docs|refactor|test|chore
-scope: core|discovery|handlers|config|infra|docs
+<type
+  >(<scope
+    >):
+    <description>
+      type: feat|fix|docs|refactor|test|chore scope:
+      core|discovery|handlers|config|infra|docs</description
+    ></scope
+  ></type
+>
 ```
 
 **範例:**
@@ -288,10 +293,12 @@ git commit -m "docs(deployment): update Lambda IAM requirements"
 **部署環境:** sss-lab AWS Account (091947912308)
 **Lambda 函數:** lights-out-sss-lab-handler
 **排程規則:**
+
 - 每週一至五 09:00 TPE 自動啟動資源
 - 每週一至五 19:00 TPE 自動停止資源
 
 **驗證完成項目:**
+
 - ✅ Lambda Function 部署與 IAM 權限配置
 - ✅ SSM Parameter Store 配置管理
 - ✅ 資源標籤（ECS Service + RDS Instance）
@@ -301,18 +308,18 @@ git commit -m "docs(deployment): update Lambda IAM requirements"
 
 ### 技術決策
 
-| 決策 | 選擇 | 理由 | 日期 |
-|------|------|------|------|
-| 主要語言 | TypeScript | 現代化、型別安全、AWS SDK v3 | 2025-12-23 |
-| Runtime | Node.js 20 | Lambda 最新穩定版本 | 2025-12-23 |
-| 部署方式 | Serverless Framework | 自動化部署、簡化配置 | 2025-12-23 |
-| 打包工具 | esbuild | 快速、輕量級打包 | 2025-12-23 |
-| 測試框架 | Vitest | 現代化、快速、原生 ESM 支援 | 2025-12-23 |
-| Phase 1 範圍 | ECS + RDS | 涵蓋常用資源類型 | 2025-12-23 |
-| Python 移除 | 2025-12-24 | 統一使用 TypeScript | 2025-12-24 |
-| 首次部署環境 | sss-lab | PoC 驗證環境 | 2025-12-29 |
-| EventBridge 排程 | 09:00-19:00 TPE | 週一至五自動啟停 | 2025-12-29 |
-| ECS Auto Scaling 整合 | 條件式偵測模式 | 支援 MinCapacity/MaxCapacity 管理 | 2025-12-30 |
+| 決策                  | 選擇                 | 理由                              | 日期       |
+| --------------------- | -------------------- | --------------------------------- | ---------- |
+| 主要語言              | TypeScript           | 現代化、型別安全、AWS SDK v3      | 2025-12-23 |
+| Runtime               | Node.js 20           | Lambda 最新穩定版本               | 2025-12-23 |
+| 部署方式              | Serverless Framework | 自動化部署、簡化配置              | 2025-12-23 |
+| 打包工具              | esbuild              | 快速、輕量級打包                  | 2025-12-23 |
+| 測試框架              | Vitest               | 現代化、快速、原生 ESM 支援       | 2025-12-23 |
+| Phase 1 範圍          | ECS + RDS            | 涵蓋常用資源類型                  | 2025-12-23 |
+| Python 移除           | 2025-12-24           | 統一使用 TypeScript               | 2025-12-24 |
+| 首次部署環境          | sss-lab              | PoC 驗證環境                      | 2025-12-29 |
+| EventBridge 排程      | 09:00-19:00 TPE      | 週一至五自動啟停                  | 2025-12-29 |
+| ECS Auto Scaling 整合 | 條件式偵測模式       | 支援 MinCapacity/MaxCapacity 管理 | 2025-12-30 |
 
 ---
 

@@ -21,18 +21,18 @@
 
 ### Active Decisions
 
-| 決策 | 選擇 | 理由 | 日期 |
-|------|------|------|------|
-| 主要語言 | TypeScript | 現代化、型別安全、AWS SDK v3 | 2025-12-23 |
-| Runtime | Node.js 20 | Lambda 最新穩定版本 | 2025-12-23 |
-| 部署方式 | Serverless Framework | 自動化部署、簡化配置 | 2025-12-23 |
-| 打包工具 | esbuild | 快速、輕量級打包 | 2025-12-23 |
-| 測試框架 | Vitest | 現代化、快速、原生 ESM 支援 | 2025-12-23 |
-| Phase 1 範圍 | ECS + RDS | 涵蓋常用資源類型 | 2025-12-23 |
-| Python 移除 | 2025-12-24 | 統一使用 TypeScript | 2025-12-24 |
-| 實作方式 | TDD + TypeScript Strict | 確保程式碼品質與型別安全 | 2025-12-23 |
-| 首次部署 | sss-lab account | PoC 環境驗證 | 2025-12-29 |
-| 排程時間 | 09:00-19:00 TPE | 週一至五工作時間 | 2025-12-29 |
+| 決策         | 選擇                    | 理由                         | 日期       |
+| ------------ | ----------------------- | ---------------------------- | ---------- |
+| 主要語言     | TypeScript              | 現代化、型別安全、AWS SDK v3 | 2025-12-23 |
+| Runtime      | Node.js 20              | Lambda 最新穩定版本          | 2025-12-23 |
+| 部署方式     | Serverless Framework    | 自動化部署、簡化配置         | 2025-12-23 |
+| 打包工具     | esbuild                 | 快速、輕量級打包             | 2025-12-23 |
+| 測試框架     | Vitest                  | 現代化、快速、原生 ESM 支援  | 2025-12-23 |
+| Phase 1 範圍 | ECS + RDS               | 涵蓋常用資源類型             | 2025-12-23 |
+| Python 移除  | 2025-12-24              | 統一使用 TypeScript          | 2025-12-24 |
+| 實作方式     | TDD + TypeScript Strict | 確保程式碼品質與型別安全     | 2025-12-23 |
+| 首次部署     | sss-lab account         | PoC 環境驗證                 | 2025-12-29 |
+| 排程時間     | 09:00-19:00 TPE         | 週一至五工作時間             | 2025-12-29 |
 
 ### Blockers
 
@@ -45,8 +45,8 @@
 <!-- 避免同時編輯，開始前登記 -->
 
 | File | Agent | Since |
-|------|-------|-------|
-| - | - | - |
+| ---- | ----- | ----- |
+| -    | -     | -     |
 
 ---
 
@@ -60,31 +60,32 @@ Python 原型實作已完成階段性任務並移除，專案統一使用 TypeSc
 
 #### TypeScript 實作 (已完成)
 
-| ID | Task | Status | Agent | Notes |
-|----|------|--------|-------|-------|
-| TS-01 | TypeScript 專案初始化 | ✅ | Claude | package.json, tsconfig.json |
-| TS-02 | types.ts | ✅ | Claude | 共用型別定義 |
-| TS-03 | utils/logger.ts | ✅ | Claude | 結構化 JSON logging |
-| TS-04 | core/config.ts | ✅ | Claude | SSM 配置載入（AWS SDK v3） |
-| TS-05 | discovery/tagDiscovery.ts | ✅ | Claude | Tag-based 資源發現 |
-| TS-06 | handlers/base.ts | ✅ | Claude | ResourceHandler 介面 |
-| TS-07 | handlers/factory.ts | ✅ | Claude | Handler Factory Pattern |
-| TS-08 | handlers/ecsService.ts | ✅ | Claude | ECS Service Handler |
-| TS-09 | handlers/rdsInstance.ts | ✅ | Claude | RDS Instance Handler |
-| TS-10 | core/orchestrator.ts | ✅ | Claude | 執行協調器 |
-| TS-11 | index.ts | ✅ | Claude | Lambda handler 入口 |
-| TS-12 | Serverless Framework | ✅ | Claude | serverless.yml + esbuild |
-| TS-13 | 測試 | ✅ | Claude | 307 個測試檔案 |
+| ID    | Task                      | Status | Agent  | Notes                       |
+| ----- | ------------------------- | ------ | ------ | --------------------------- |
+| TS-01 | TypeScript 專案初始化     | ✅     | Claude | package.json, tsconfig.json |
+| TS-02 | types.ts                  | ✅     | Claude | 共用型別定義                |
+| TS-03 | utils/logger.ts           | ✅     | Claude | 結構化 JSON logging         |
+| TS-04 | core/config.ts            | ✅     | Claude | SSM 配置載入（AWS SDK v3）  |
+| TS-05 | discovery/tagDiscovery.ts | ✅     | Claude | Tag-based 資源發現          |
+| TS-06 | handlers/base.ts          | ✅     | Claude | ResourceHandler 介面        |
+| TS-07 | handlers/factory.ts       | ✅     | Claude | Handler Factory Pattern     |
+| TS-08 | handlers/ecsService.ts    | ✅     | Claude | ECS Service Handler         |
+| TS-09 | handlers/rdsInstance.ts   | ✅     | Claude | RDS Instance Handler        |
+| TS-10 | core/orchestrator.ts      | ✅     | Claude | 執行協調器                  |
+| TS-11 | index.ts                  | ✅     | Claude | Lambda handler 入口         |
+| TS-12 | Serverless Framework      | ✅     | Claude | serverless.yml + esbuild    |
+| TS-13 | 測試                      | ✅     | Claude | 307 個測試檔案              |
 
 #### 部署與驗證 (已完成 - 2025-12-29)
-| ID | Task | Status | Agent | Notes |
-|----|------|--------|-------|-------|
-| D-01 | 建立 IAM Role | ✅ | Serverless | 自動建立（含 ECS + RDS + SSM 權限） |
-| D-02 | 建立 SSM Parameter | ✅ | DevOps | /lights-out/config（手動創建） |
-| D-03 | 為資源加標籤 | ✅ | DevOps | sss-lab 資源已標記 lights-out:* tags |
-| D-04 | 部署 Lambda | ✅ | DevOps | Serverless Framework v3.39.0 部署成功 |
-| D-05 | 建立 EventBridge | ✅ | Serverless | start/stop cron rules 已建立 |
-| D-06 | sss-lab 驗證 | ✅ | DevOps | 端對端測試（手動 + 排程觸發）全部通過 |
+
+| ID   | Task               | Status | Agent      | Notes                                 |
+| ---- | ------------------ | ------ | ---------- | ------------------------------------- |
+| D-01 | 建立 IAM Role      | ✅     | Serverless | 自動建立（含 ECS + RDS + SSM 權限）   |
+| D-02 | 建立 SSM Parameter | ✅     | DevOps     | /lights-out/config（手動創建）        |
+| D-03 | 為資源加標籤       | ✅     | DevOps     | sss-lab 資源已標記 lights-out:\* tags |
+| D-04 | 部署 Lambda        | ✅     | DevOps     | Serverless Framework v3.39.0 部署成功 |
+| D-05 | 建立 EventBridge   | ✅     | Serverless | start/stop cron rules 已建立          |
+| D-06 | sss-lab 驗證       | ✅     | DevOps     | 端對端測試（手動 + 排程觸發）全部通過 |
 
 **Status:** 🔲 Todo | 🔄 In Progress | ✅ Done | ⏸️ Blocked
 
@@ -101,19 +102,19 @@ Python 原型實作已完成階段性任務並移除，專案統一使用 TypeSc
 **範例:**
 
 ```yaml
-version: "1.0"
+version: '1.0'
 environment: sss-lab
 
 # Optional: List of AWS regions to scan for resources
 # If omitted, defaults to Lambda's deployment region
 regions:
-  - ap-southeast-1  # Singapore
-  - ap-northeast-1  # Tokyo
+  - ap-southeast-1 # Singapore
+  - ap-northeast-1 # Tokyo
 
 discovery:
   method: tags
   tagFilters:
-    lights-out:managed: "true"
+    lights-out:managed: 'true'
     lights-out:env: sss-lab
   resourceTypes:
     - ecs-service
@@ -133,8 +134,8 @@ overrides: {}
 schedules:
   default:
     timezone: Asia/Taipei
-    startTime: "09:00"
-    stopTime: "19:00"
+    startTime: '09:00'
+    stopTime: '19:00'
     activeDays:
       - MON
       - TUE
@@ -149,11 +150,11 @@ schedules:
 ```typescript
 // src/types.ts
 export interface DiscoveredResource {
-  resourceType: string;     // "ecs-service" | "rds-db"
-  arn: string;              // Full AWS ARN
-  resourceId: string;       // Human-readable ID (e.g., "cluster/service")
-  priority: number;         // From tag, default 100
-  group: string;            // Schedule group name
+  resourceType: string; // "ecs-service" | "rds-db"
+  arn: string; // Full AWS ARN
+  resourceId: string; // Human-readable ID (e.g., "cluster/service")
+  priority: number; // From tag, default 100
+  group: string; // Schedule group name
   tags: Record<string, string>;
   metadata: Record<string, unknown>;
 }
@@ -213,11 +214,7 @@ export interface ResourceHandler {
     {
       "Sid": "RDS",
       "Effect": "Allow",
-      "Action": [
-        "rds:DescribeDBInstances",
-        "rds:StartDBInstance",
-        "rds:StopDBInstance"
-      ],
+      "Action": ["rds:DescribeDBInstances", "rds:StartDBInstance", "rds:StopDBInstance"],
       "Resource": "*"
     },
     {
@@ -235,11 +232,7 @@ export interface ResourceHandler {
     {
       "Sid": "Logs",
       "Effect": "Allow",
-      "Action": [
-        "logs:CreateLogGroup",
-        "logs:CreateLogStream",
-        "logs:PutLogEvents"
-      ],
+      "Action": ["logs:CreateLogGroup", "logs:CreateLogStream", "logs:PutLogEvents"],
       "Resource": "*"
     }
   ]
@@ -248,12 +241,12 @@ export interface ResourceHandler {
 
 ### Environment Variables
 
-| Variable | Required | Default | Description |
-|----------|----------|---------|-------------|
-| `CONFIG_PARAMETER_NAME` | Yes | - | SSM parameter name (e.g., `/lights-out/workshop/config`) |
-| `DRY_RUN` | No | `false` | Skip actual operations |
-| `LOG_LEVEL` | No | `INFO` | Logging level |
-| `AWS_REGION` | No | `ap-southeast-1` | AWS Region (由 Lambda 自動設定) |
+| Variable                | Required | Default          | Description                                              |
+| ----------------------- | -------- | ---------------- | -------------------------------------------------------- |
+| `CONFIG_PARAMETER_NAME` | Yes      | -                | SSM parameter name (e.g., `/lights-out/workshop/config`) |
+| `DRY_RUN`               | No       | `false`          | Skip actual operations                                   |
+| `LOG_LEVEL`             | No       | `INFO`           | Logging level                                            |
+| `AWS_REGION`            | No       | `ap-southeast-1` | AWS Region (由 Lambda 自動設定)                          |
 
 ---
 
@@ -267,40 +260,51 @@ import { ECSClient, DescribeServicesCommand, UpdateServiceCommand } from '@aws-s
 const ecs = new ECSClient({ region: 'ap-southeast-1' });
 
 // Status
-await ecs.send(new DescribeServicesCommand({
-  cluster: 'cluster-name',
-  services: ['service-name']
-}));
+await ecs.send(
+  new DescribeServicesCommand({
+    cluster: 'cluster-name',
+    services: ['service-name'],
+  })
+);
 
 // Stop
-await ecs.send(new UpdateServiceCommand({
-  cluster: 'cluster-name',
-  service: 'service-name',
-  desiredCount: 0
-}));
+await ecs.send(
+  new UpdateServiceCommand({
+    cluster: 'cluster-name',
+    service: 'service-name',
+    desiredCount: 0,
+  })
+);
 
 // Start
-await ecs.send(new UpdateServiceCommand({
-  cluster: 'cluster-name',
-  service: 'service-name',
-  desiredCount: 1
-}));
+await ecs.send(
+  new UpdateServiceCommand({
+    cluster: 'cluster-name',
+    service: 'service-name',
+    desiredCount: 1,
+  })
+);
 ```
 
 ### Resource Groups Tagging API
 
 ```typescript
-import { ResourceGroupsTaggingAPIClient, GetResourcesCommand } from '@aws-sdk/client-resource-groups-tagging-api';
+import {
+  ResourceGroupsTaggingAPIClient,
+  GetResourcesCommand,
+} from '@aws-sdk/client-resource-groups-tagging-api';
 
 const tagging = new ResourceGroupsTaggingAPIClient({ region: 'ap-southeast-1' });
 
-await tagging.send(new GetResourcesCommand({
-  TagFilters: [
-    { Key: 'lights-out:managed', Values: ['true'] },
-    { Key: 'lights-out:env', Values: ['workshop'] }
-  ],
-  ResourceTypeFilters: ['ecs:service']
-}));
+await tagging.send(
+  new GetResourcesCommand({
+    TagFilters: [
+      { Key: 'lights-out:managed', Values: ['true'] },
+      { Key: 'lights-out:env', Values: ['workshop'] },
+    ],
+    ResourceTypeFilters: ['ecs:service'],
+  })
+);
 ```
 
 ### SSM Parameter Store
@@ -310,10 +314,12 @@ import { SSMClient, GetParameterCommand } from '@aws-sdk/client-ssm';
 
 const ssm = new SSMClient({ region: 'ap-southeast-1' });
 
-const response = await ssm.send(new GetParameterCommand({
-  Name: '/lights-out/workshop/config',
-  WithDecryption: true
-}));
+const response = await ssm.send(
+  new GetParameterCommand({
+    Name: '/lights-out/workshop/config',
+    WithDecryption: true,
+  })
+);
 
 const config = yaml.parse(response.Parameter.Value);
 ```
@@ -324,28 +330,25 @@ const config = yaml.parse(response.Parameter.Value);
 
 ### Agent 分工建議
 
-| Agent | 擅長 | 建議任務 |
-|-------|------|----------|
+| Agent       | 擅長           | 建議任務               |
+| ----------- | -------------- | ---------------------- |
 | Claude Code | 架構、複雜邏輯 | handlers、orchestrator |
-| Gemini CLI | 文件、測試 | tests、docs、review |
+| Gemini CLI  | 文件、測試     | tests、docs、review    |
 
 ### TDD 開發流程 (TDD Development Workflow)
 
 為了確保程式碼品質與開發者對需求的理解，所有核心程式碼開發任務都應遵循 TDD 流程。
 
 1. **Red (寫一個失敗的測試):**
-
    - 針對一個具體的功能需求，先在 `tests/` 目錄下撰寫一個對應的單元測試。
    - 這個測試應該會因為功能尚未實作而失敗。
    - **指令範例:** `pnpm test tests/core/config.test.ts`
 
 2. **Green (寫最少的程式碼讓測試通過):**
-
    - 在 `src/` 目錄下撰寫最精簡的程式碼，剛好能讓前一步的測試通過即可。
    - 此階段不追求完美的程式碼結構或效能。
 
 3. **Refactor (重構程式碼):**
-
    - 在測試持續通過的前提下，重構 `src/` 中的程式碼，改善可讀性、結構和效率。
    - 確保程式碼符合 `Code Review Checklist` 的所有要求（TypeScript strict mode、返回型別等）。
 
@@ -356,17 +359,14 @@ const config = yaml.parse(response.Parameter.Value);
 AI Agents **必須遵守** 以下執行限制：
 
 1. **禁止自動執行測試:**
-
    - ❌ 不可自動執行 `pnpm test`、`vitest run` 等測試指令
    - ✅ 應提供測試指令，讓開發者確認後執行
 
 2. **禁止自動執行主程式:**
-
    - ❌ 不可自動執行 `pnpm deploy`、`aws lambda invoke` 等主程式
    - ✅ 應提供執行指令，說明參數與預期結果
 
 3. **環境說明:**
-
    - 避免意外執行測試或部署影響 AWS 資源狀態
    - 型別檢查（`pnpm type-check`）可以執行，因為不會影響運行時
 
@@ -376,6 +376,33 @@ AI Agents **必須遵守** 以下執行限制：
 - ✅ 靜態程式碼分析（Grep、Glob）
 - ✅ Git 操作（status、diff、commit）
 - ✅ 文件生成與更新
+
+### 依賴管理策略 (Dependency Management)
+
+**⚠️ CRITICAL: Context7 MCP 使用規則**
+
+遇到依賴相關問題時（版本衝突、API 變更、配置格式等），**必須**先使用 Context7 MCP 取得最新文檔：
+
+1. **查詢依賴版本資訊:**
+   - ✅ 使用 `mcp__context7__resolve-library-id` 查詢 library ID
+   - ✅ 使用 `mcp__context7__query-docs` 取得最新文檔與範例
+
+2. **適用場景:**
+   - ESLint、Prettier、Husky 等工具版本升級導致配置格式變更
+   - AWS SDK、Serverless Framework API 變更
+   - 第三方套件使用方式不確定
+
+3. **Why:**
+   - 避免使用過時的配置格式（如 ESLint v9 flat config）
+   - 確保使用正確的 API（如 Husky v9 移除 `husky install`）
+   - 減少因文檔過時造成的錯誤
+
+**範例：**
+
+```typescript
+// ❌ 錯誤：未查詢文檔，使用過時的 .eslintrc.js
+// ✅ 正確：先用 Context7 查詢 ESLint v9 文檔，得知需使用 eslint.config.js
+```
 
 ### 溝通協定
 

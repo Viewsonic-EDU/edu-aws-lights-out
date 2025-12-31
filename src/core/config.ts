@@ -5,78 +5,96 @@
  * validates the structure, and provides caching for performance.
  */
 
-import { SSMClient, GetParameterCommand } from "@aws-sdk/client-ssm";
-import { LRUCache } from "lru-cache";
-import yaml from "js-yaml";
-import { z } from "zod";
-import type { Config } from "@/types";
-import { setupLogger } from "@utils/logger";
+import { SSMClient, GetParameterCommand } from '@aws-sdk/client-ssm';
+import { LRUCache } from 'lru-cache';
+import yaml from 'js-yaml';
+import { z } from 'zod';
+import type { Config } from '@/types';
+import { setupLogger } from '@utils/logger';
 
-const logger = setupLogger("lights-out:config");
+const logger = setupLogger('lights-out:config');
 
 /**
  * ECS Stop Behavior schema validation.
  *
  * Validates the stopBehavior configuration for ECS services.
  */
-const ECSStopBehaviorSchema = z.object({
-  mode: z.enum(["scale_to_zero", "reduce_by_count", "reduce_to_count"]),
-  reduceByCount: z.number().int().positive().optional(),
-  reduceToCount: z.number().int().nonnegative().optional(),
-}).refine(
-  (data) => {
-    if (data.mode === "reduce_by_count") {
-      return data.reduceByCount !== undefined;
+const ECSStopBehaviorSchema = z
+  .object({
+    mode: z.enum(['scale_to_zero', 'reduce_by_count', 'reduce_to_count']),
+    reduceByCount: z.number().int().positive().optional(),
+    reduceToCount: z.number().int().nonnegative().optional(),
+  })
+  .refine(
+    (data) => {
+      if (data.mode === 'reduce_by_count') {
+        return data.reduceByCount !== undefined;
+      }
+      if (data.mode === 'reduce_to_count') {
+        return data.reduceToCount !== undefined;
+      }
+      return true;
+    },
+    {
+      message:
+        'reduceByCount required for reduce_by_count mode, reduceToCount required for reduce_to_count mode',
     }
-    if (data.mode === "reduce_to_count") {
-      return data.reduceToCount !== undefined;
-    }
-    return true;
-  },
-  {
-    message: "reduceByCount required for reduce_by_count mode, reduceToCount required for reduce_to_count mode"
-  }
-);
+  );
 
 /**
  * ECS Auto Scaling schema validation.
  *
  * Validates the autoScaling configuration for ECS services.
  */
-const ECSAutoScalingSchema = z.object({
-  minCapacity: z.number().int().nonnegative(),
-  maxCapacity: z.number().int().positive(),
-  desiredCount: z.number().int().nonnegative(),
-}).refine(
-  (data) => data.minCapacity <= data.maxCapacity,
-  { message: "minCapacity must be <= maxCapacity" }
-).refine(
-  (data) => data.desiredCount >= data.minCapacity && data.desiredCount <= data.maxCapacity,
-  { message: "desiredCount must be between minCapacity and maxCapacity" }
-);
+const ECSAutoScalingSchema = z
+  .object({
+    minCapacity: z.number().int().nonnegative(),
+    maxCapacity: z.number().int().positive(),
+    desiredCount: z.number().int().nonnegative(),
+  })
+  .refine((data) => data.minCapacity <= data.maxCapacity, {
+    message: 'minCapacity must be <= maxCapacity',
+  })
+  .refine(
+    (data) => data.desiredCount >= data.minCapacity && data.desiredCount <= data.maxCapacity,
+    { message: 'desiredCount must be between minCapacity and maxCapacity' }
+  );
 
 /**
  * Configuration schema validation using Zod.
  *
  * Ensures the loaded config has all required fields with proper types.
  */
-const ConfigSchema = z.object({
-  version: z.string(),
-  environment: z.string(),
-  regions: z.array(z.string()).optional(),  // Optional list of AWS regions to scan
-  discovery: z.object({
-    method: z.string(),
-    tags: z.record(z.string()).optional(),
-    resource_types: z.array(z.string()).optional(),
-  }).passthrough(),
-  settings: z.object({
-    schedule_tag: z.string().optional(),
-  }).passthrough().optional(),
-  resource_defaults: z.record(z.object({
-    stopBehavior: ECSStopBehaviorSchema.optional(),
-    autoScaling: ECSAutoScalingSchema.optional(),
-  }).passthrough()).optional(),
-}).passthrough();
+const ConfigSchema = z
+  .object({
+    version: z.string(),
+    environment: z.string(),
+    regions: z.array(z.string()).optional(), // Optional list of AWS regions to scan
+    discovery: z
+      .object({
+        method: z.string(),
+        tags: z.record(z.string()).optional(),
+        resource_types: z.array(z.string()).optional(),
+      })
+      .passthrough(),
+    settings: z
+      .object({
+        schedule_tag: z.string().optional(),
+      })
+      .passthrough()
+      .optional(),
+    resource_defaults: z
+      .record(
+        z
+          .object({
+            stopBehavior: ECSStopBehaviorSchema.optional(),
+            autoScaling: ECSAutoScalingSchema.optional(),
+          })
+          .passthrough()
+      )
+      .optional(),
+  })
+  .passthrough();
 
 /**
  * Base exception for configuration errors.
@@ -84,7 +102,7 @@ const ConfigSchema = z.object({
 export class ConfigError extends Error {
   constructor(message: string, options?: ErrorOptions) {
     super(message, options);
-    this.name = "ConfigError";
+    this.name = 'ConfigError';
   }
 }
 
@@ -94,7 +112,7 @@ export class ConfigError extends Error {
 export class ParameterNotFoundError extends ConfigError {
   constructor(message: string, options?: ErrorOptions) {
     super(message, options);
-    this.name = "ParameterNotFoundError";
+    this.name = 'ParameterNotFoundError';
   }
 }
 
@@ -104,7 +122,7 @@ export class ParameterNotFoundError extends ConfigError {
 export class ConfigValidationError extends ConfigError {
   constructor(message: string, options?: ErrorOptions) {
     super(message, options);
-    this.name = "ConfigValidationError";
+    this.name = 'ConfigValidationError';
   }
 }
 
@@ -148,25 +166,22 @@ export async function loadConfigFromSsm(
   try {
     const command = new GetParameterCommand({ Name: parameterName });
     const response = await ssmClient.send(command);
-    parameterValue = response.Parameter?.Value ?? "";
+    parameterValue = response.Parameter?.Value ?? '';
 
     if (!parameterValue) {
-      throw new ConfigError(
-        `SSM parameter ${parameterName} exists but has no value`
-      );
+      throw new ConfigError(`SSM parameter ${parameterName} exists but has no value`);
     }
   } catch (error) {
     // Type guard for AWS SDK errors
     if (
       error &&
-      typeof error === "object" &&
-      "name" in error &&
-      error.name === "ParameterNotFound"
+      typeof error === 'object' &&
+      'name' in error &&
+      error.name === 'ParameterNotFound'
     ) {
-      throw new ParameterNotFoundError(
-        `Could not find SSM parameter: ${parameterName}`,
-        { cause: error }
-      );
+      throw new ParameterNotFoundError(`Could not find SSM parameter: ${parameterName}`, {
+        cause: error,
+      });
     }
     throw new ConfigError(`Failed to retrieve SSM parameter: ${String(error)}`, {
       cause: error,
@@ -191,24 +206,23 @@ export async function loadConfigFromSsm(
   } catch (error) {
     if (error instanceof z.ZodError) {
       const missingFields = error.errors
-        .filter((e) => e.code === "invalid_type")
-        .map((e) => e.path.join("."));
+        .filter((e) => e.code === 'invalid_type')
+        .map((e) => e.path.join('.'));
 
       throw new ConfigValidationError(
-        `Configuration validation failed. Missing or invalid fields: ${missingFields.join(", ")}`,
+        `Configuration validation failed. Missing or invalid fields: ${missingFields.join(', ')}`,
         { cause: error }
       );
     }
-    throw new ConfigValidationError(
-      `Configuration validation failed: ${String(error)}`,
-      { cause: error }
-    );
+    throw new ConfigValidationError(`Configuration validation failed: ${String(error)}`, {
+      cause: error,
+    });
   }
 
   // Cache the validated config
   configCache.set(parameterName, validatedConfig);
 
-  logger.info("Config loaded successfully");
+  logger.info('Config loaded successfully');
   return validatedConfig;
 }
 
@@ -218,5 +232,5 @@ export async function loadConfigFromSsm(
  */
 export function clearConfigCache(): void {
   configCache.clear();
-  logger.debug("Config cache cleared");
+  logger.debug('Config cache cleared');
 }

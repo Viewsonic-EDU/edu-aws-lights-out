@@ -1,24 +1,24 @@
-import { describe, it, expect, beforeEach } from "vitest";
-import { mockClient } from "aws-sdk-client-mock";
-import { SSMClient, GetParameterCommand } from "@aws-sdk/client-ssm";
+import { describe, it, expect, beforeEach } from 'vitest';
+import { mockClient } from 'aws-sdk-client-mock';
+import { SSMClient, GetParameterCommand } from '@aws-sdk/client-ssm';
 import {
   loadConfigFromSsm,
   clearConfigCache,
   ConfigError,
   ParameterNotFoundError,
   ConfigValidationError,
-} from "@core/config";
+} from '@core/config';
 
 const ssmMock = mockClient(SSMClient);
 
-describe("Config Loader", () => {
+describe('Config Loader', () => {
   beforeEach(() => {
     ssmMock.reset();
     clearConfigCache();
   });
 
-  describe("loadConfigFromSsm", () => {
-    it("should load and parse valid YAML configuration from SSM", async () => {
+  describe('loadConfigFromSsm', () => {
+    it('should load and parse valid YAML configuration from SSM', async () => {
       const validConfig = `
 version: "1.0"
 environment: workshop
@@ -34,20 +34,20 @@ discovery:
         },
       });
 
-      const config = await loadConfigFromSsm("/test/parameter");
+      const config = await loadConfigFromSsm('/test/parameter');
 
       expect(config).toBeDefined();
-      expect(config.version).toBe("1.0");
-      expect(config.environment).toBe("workshop");
+      expect(config.version).toBe('1.0');
+      expect(config.environment).toBe('workshop');
       expect(config.discovery).toEqual({
-        method: "tag-based", // Corrected from 'strategy' to 'method'
+        method: 'tag-based', // Corrected from 'strategy' to 'method'
         tags: {
-          "lights-out:managed": "true",
+          'lights-out:managed': 'true',
         },
       });
     });
 
-    it("should cache configuration to avoid duplicate SSM calls", async () => {
+    it('should cache configuration to avoid duplicate SSM calls', async () => {
       const validConfig = `
 version: "1.0"
 environment: workshop
@@ -62,59 +62,53 @@ discovery:
       });
 
       // First call - should hit SSM
-      await loadConfigFromSsm("/test/parameter");
+      await loadConfigFromSsm('/test/parameter');
 
       // Second call - should use cache
-      await loadConfigFromSsm("/test/parameter");
+      await loadConfigFromSsm('/test/parameter');
 
       // SSM should only be called once due to caching
       expect(ssmMock.calls()).toHaveLength(1);
     });
 
-    it("should throw ParameterNotFoundError when SSM parameter does not exist", async () => {
-      const notFoundError = new Error("ParameterNotFound");
-      notFoundError.name = "ParameterNotFound";
+    it('should throw ParameterNotFoundError when SSM parameter does not exist', async () => {
+      const notFoundError = new Error('ParameterNotFound');
+      notFoundError.name = 'ParameterNotFound';
 
       ssmMock.on(GetParameterCommand).rejects(notFoundError);
 
-      await expect(loadConfigFromSsm("/nonexistent/parameter")).rejects.toThrow(
+      await expect(loadConfigFromSsm('/nonexistent/parameter')).rejects.toThrow(
         ParameterNotFoundError
       );
 
-      await expect(loadConfigFromSsm("/nonexistent/parameter")).rejects.toThrow(
-        "Could not find SSM parameter: /nonexistent/parameter"
+      await expect(loadConfigFromSsm('/nonexistent/parameter')).rejects.toThrow(
+        'Could not find SSM parameter: /nonexistent/parameter'
       );
     });
 
-    it("should throw ConfigError when SSM returns empty value", async () => {
+    it('should throw ConfigError when SSM returns empty value', async () => {
       ssmMock.on(GetParameterCommand).resolves({
         Parameter: {
-          Value: "",
+          Value: '',
         },
       });
 
-      await expect(loadConfigFromSsm("/test/parameter")).rejects.toThrow(
-        ConfigError
-      );
+      await expect(loadConfigFromSsm('/test/parameter')).rejects.toThrow(ConfigError);
 
-      await expect(loadConfigFromSsm("/test/parameter")).rejects.toThrow(
-        "has no value"
+      await expect(loadConfigFromSsm('/test/parameter')).rejects.toThrow('has no value');
+    });
+
+    it('should throw ConfigError when SSM call fails with generic error', async () => {
+      ssmMock.on(GetParameterCommand).rejects(new Error('Network timeout'));
+
+      await expect(loadConfigFromSsm('/test/parameter')).rejects.toThrow(ConfigError);
+
+      await expect(loadConfigFromSsm('/test/parameter')).rejects.toThrow(
+        'Failed to retrieve SSM parameter'
       );
     });
 
-    it("should throw ConfigError when SSM call fails with generic error", async () => {
-      ssmMock.on(GetParameterCommand).rejects(new Error("Network timeout"));
-
-      await expect(loadConfigFromSsm("/test/parameter")).rejects.toThrow(
-        ConfigError
-      );
-
-      await expect(loadConfigFromSsm("/test/parameter")).rejects.toThrow(
-        "Failed to retrieve SSM parameter"
-      );
-    });
-
-    it("should throw ConfigError when YAML is malformed", async () => {
+    it('should throw ConfigError when YAML is malformed', async () => {
       const malformedYaml = `
 version: 1.0
 environment: [unclosed
@@ -127,12 +121,10 @@ discovery: }invalid
         },
       });
 
-      await expect(loadConfigFromSsm("/test/parameter")).rejects.toThrow(
-        ConfigError
-      );
+      await expect(loadConfigFromSsm('/test/parameter')).rejects.toThrow(ConfigError);
 
-      await expect(loadConfigFromSsm("/test/parameter")).rejects.toThrow(
-        "Failed to parse YAML configuration"
+      await expect(loadConfigFromSsm('/test/parameter')).rejects.toThrow(
+        'Failed to parse YAML configuration'
       );
     });
 
@@ -149,12 +141,10 @@ discovery:
         },
       });
 
-      await expect(loadConfigFromSsm("/test/parameter")).rejects.toThrow(
-        ConfigValidationError
-      );
+      await expect(loadConfigFromSsm('/test/parameter')).rejects.toThrow(ConfigValidationError);
 
-      await expect(loadConfigFromSsm("/test/parameter")).rejects.toThrow(
-        "Configuration validation failed"
+      await expect(loadConfigFromSsm('/test/parameter')).rejects.toThrow(
+        'Configuration validation failed'
       );
     });
 
@@ -171,9 +161,7 @@ discovery:
         },
       });
 
-      await expect(loadConfigFromSsm("/test/parameter")).rejects.toThrow(
-        ConfigValidationError
-      );
+      await expect(loadConfigFromSsm('/test/parameter')).rejects.toThrow(ConfigValidationError);
     });
 
     it("should throw ConfigValidationError when required field 'discovery' is missing", async () => {
@@ -188,12 +176,10 @@ environment: workshop
         },
       });
 
-      await expect(loadConfigFromSsm("/test/parameter")).rejects.toThrow(
-        ConfigValidationError
-      );
+      await expect(loadConfigFromSsm('/test/parameter')).rejects.toThrow(ConfigValidationError);
     });
 
-    it("should accept configuration with optional fields", async () => {
+    it('should accept configuration with optional fields', async () => {
       const configWithOptionals = `
 version: "1.0"
 environment: workshop
@@ -218,10 +204,10 @@ handlers:
         },
       });
 
-      const config = await loadConfigFromSsm("/test/parameter");
+      const config = await loadConfigFromSsm('/test/parameter');
 
       expect(config).toBeDefined();
-      expect(config.version).toBe("1.0");
+      expect(config.version).toBe('1.0');
       // The original schema does not include 'schedule', 'resources', 'handlers' in the ConfigSchema definition.
       // However, it uses .passthrough() which allows extra fields.
       // The test expects these fields to be defined on the resulting config.
@@ -231,11 +217,11 @@ handlers:
       expect(config.handlers).toBeDefined();
       // Ensure the discovery.method is correctly parsed
       expect(config.discovery).toEqual({
-        method: "tag-based",
+        method: 'tag-based',
       });
     });
 
-    it("should handle different parameter names independently in cache", async () => {
+    it('should handle different parameter names independently in cache', async () => {
       const config1 = `
 version: "1.0"
 environment: dev
@@ -251,22 +237,22 @@ discovery:
 `; // Corrected indentation and 'strategy' to 'method'
 
       ssmMock
-        .on(GetParameterCommand, { Name: "/dev/parameter" })
+        .on(GetParameterCommand, { Name: '/dev/parameter' })
         .resolves({ Parameter: { Value: config1 } })
-        .on(GetParameterCommand, { Name: "/prod/parameter" })
+        .on(GetParameterCommand, { Name: '/prod/parameter' })
         .resolves({ Parameter: { Value: config2 } });
 
-      const devConfig = await loadConfigFromSsm("/dev/parameter");
-      const prodConfig = await loadConfigFromSsm("/prod/parameter");
+      const devConfig = await loadConfigFromSsm('/dev/parameter');
+      const prodConfig = await loadConfigFromSsm('/prod/parameter');
 
-      expect(devConfig.environment).toBe("dev");
-      expect(prodConfig.environment).toBe("prod");
+      expect(devConfig.environment).toBe('dev');
+      expect(prodConfig.environment).toBe('prod');
       expect(ssmMock.calls()).toHaveLength(2);
     });
   });
 
-  describe("clearConfigCache", () => {
-    it("should clear the cache and force reload from SSM", async () => {
+  describe('clearConfigCache', () => {
+    it('should clear the cache and force reload from SSM', async () => {
       const config = `
 version: "1.0"
 environment: workshop
@@ -281,41 +267,41 @@ discovery:
       });
 
       // First load
-      await loadConfigFromSsm("/test/parameter");
+      await loadConfigFromSsm('/test/parameter');
       expect(ssmMock.calls()).toHaveLength(1);
 
       // Second load (should use cache)
-      await loadConfigFromSsm("/test/parameter");
+      await loadConfigFromSsm('/test/parameter');
       expect(ssmMock.calls()).toHaveLength(1);
 
       // Clear cache
       clearConfigCache();
 
       // Third load (should hit SSM again)
-      await loadConfigFromSsm("/test/parameter");
+      await loadConfigFromSsm('/test/parameter');
       expect(ssmMock.calls()).toHaveLength(2);
     });
   });
 
-  describe("Error Hierarchy", () => {
-    it("should maintain proper error inheritance chain", () => {
-      const configError = new ConfigError("test");
-      const paramNotFound = new ParameterNotFoundError("test");
-      const validationError = new ConfigValidationError("test");
+  describe('Error Hierarchy', () => {
+    it('should maintain proper error inheritance chain', () => {
+      const configError = new ConfigError('test');
+      const paramNotFound = new ParameterNotFoundError('test');
+      const validationError = new ConfigValidationError('test');
 
       expect(configError).toBeInstanceOf(Error);
       expect(configError).toBeInstanceOf(ConfigError);
-      expect(configError.name).toBe("ConfigError");
+      expect(configError.name).toBe('ConfigError');
 
       expect(paramNotFound).toBeInstanceOf(Error);
       expect(paramNotFound).toBeInstanceOf(ConfigError);
       expect(paramNotFound).toBeInstanceOf(ParameterNotFoundError);
-      expect(paramNotFound.name).toBe("ParameterNotFoundError");
+      expect(paramNotFound.name).toBe('ParameterNotFoundError');
 
       expect(validationError).toBeInstanceOf(Error);
       expect(validationError).toBeInstanceOf(ConfigError);
       expect(validationError).toBeInstanceOf(ConfigValidationError);
-      expect(validationError.name).toBe("ConfigValidationError");
+      expect(validationError.name).toBe('ConfigValidationError');
     });
   });
 });

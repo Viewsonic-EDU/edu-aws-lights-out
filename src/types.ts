@@ -7,7 +7,7 @@
 /**
  * Valid Lambda action types.
  */
-export type LambdaAction = "start" | "stop" | "status" | "discover";
+export type LambdaAction = 'start' | 'stop' | 'status' | 'discover';
 
 /**
  * Execution strategy for resource operations.
@@ -16,7 +16,7 @@ export type LambdaAction = "start" | "stop" | "status" | "discover";
  * - parallel: Process all resources simultaneously, ignoring priority (fastest, riskiest)
  * - grouped-parallel: Process same-priority resources in parallel, different priorities sequentially (balanced, recommended)
  */
-export type ExecutionStrategy = "sequential" | "parallel" | "grouped-parallel";
+export type ExecutionStrategy = 'sequential' | 'parallel' | 'grouped-parallel';
 
 /**
  * Discovered resource from tag discovery.
@@ -121,7 +121,7 @@ export interface ECSStopBehavior {
    * - reduce_by_count: Reduce current desiredCount by a specific amount
    * - reduce_to_count: Set desiredCount to a specific target value
    */
-  mode: "scale_to_zero" | "reduce_by_count" | "reduce_to_count";
+  mode: 'scale_to_zero' | 'reduce_by_count' | 'reduce_to_count';
 
   /**
    * Amount to reduce when mode is "reduce_by_count".
@@ -206,7 +206,7 @@ export interface ECSResourceDefaults {
 export interface Config {
   version: string;
   environment: string;
-  regions?: string[];  // Optional list of AWS regions to scan
+  regions?: string[]; // Optional list of AWS regions to scan
   discovery: {
     method: string;
     tags?: Record<string, string>;
@@ -236,7 +236,7 @@ export interface OrchestrationResult {
  * Discovery result for the "discover" action.
  */
 export interface DiscoveryResult {
-  action: "discover";
+  action: 'discover';
   discovered_count: number;
   resources: Array<{
     resource_type: string;

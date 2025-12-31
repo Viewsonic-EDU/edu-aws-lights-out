@@ -12,12 +12,12 @@ import type {
   HandlerResult,
   LambdaAction,
   ExecutionStrategy,
-} from "@/types";
-import { TagDiscovery } from "@discovery/tagDiscovery";
-import { getHandler } from "@handlers/factory";
-import { setupLogger } from "@utils/logger";
+} from '@/types';
+import { TagDiscovery } from '@discovery/tagDiscovery';
+import { getHandler } from '@handlers/factory';
+import { setupLogger } from '@utils/logger';
 
-const logger = setupLogger("lights-out:orchestrator");
+const logger = setupLogger('lights-out:orchestrator');
 
 export class Orchestrator {
   private readonly config: Config;
@@ -40,20 +40,23 @@ export class Orchestrator {
     const regions = this.config.regions ?? [];
 
     if (Object.keys(tagFilters).length === 0) {
-      logger.warn("No tag filters configured for discovery");
+      logger.warn('No tag filters configured for discovery');
       return [];
     }
 
     if (resourceTypes.length === 0) {
-      logger.warn("No resource types configured for discovery");
+      logger.warn('No resource types configured for discovery');
       return [];
     }
 
-    logger.info({
-      tagFilters,
-      resourceTypes,
-      regions: regions.length > 0 ? regions : ["default (Lambda region)"],
-    }, "Starting tag-based resource discovery");
+    logger.info(
+      {
+        tagFilters,
+        resourceTypes,
+        regions: regions.length > 0 ? regions : ['default (Lambda region)'],
+      },
+      'Starting tag-based resource discovery'
+    );
 
     const discovery = new TagDiscovery(tagFilters, resourceTypes, regions);
     const resources = await discovery.discover();
@@ -69,7 +72,7 @@ export class Orchestrator {
    * @returns Orchestration result summary
    */
   async run(action: LambdaAction): Promise<OrchestrationResult> {
-    logger.info({ action }, "Starting orchestration");
+    logger.info({ action }, 'Starting orchestration');
 
     const resources = await this.discoverResources();
 
@@ -81,27 +84,28 @@ export class Orchestrator {
     logger.info(`Processing ${sortedResources.length} resources`);
 
     // Determine execution strategy
-    const strategy = (this.config.settings?.execution_strategy as ExecutionStrategy) ?? "grouped-parallel";
-    logger.info({ strategy }, "Using execution strategy");
+    const strategy =
+      (this.config.settings?.execution_strategy as ExecutionStrategy) ?? 'grouped-parallel';
+    logger.info({ strategy }, 'Using execution strategy');
 
     // Execute based on strategy
     let results: HandlerResult[];
     switch (strategy) {
-      case "sequential":
+      case 'sequential':
         results = await this.executeSequential(sortedResources, action);
         break;
-      case "parallel":
+      case 'parallel':
         results = await this.executeParallel(sortedResources, action);
         break;
-      case "grouped-parallel":
+      case 'grouped-parallel':
       default:
         results = await this.executeGroupedParallel(sortedResources, action);
         break;
     }
 
     // Calculate summary
-    const succeeded = results.filter(r => r.success).length;
-    const failed = results.filter(r => !r.success).length;
+    const succeeded = results.filter((r) => r.success).length;
+    const failed = results.filter((r) => !r.success).length;
 
     const summary: OrchestrationResult = {
       total: sortedResources.length,
@@ -110,7 +114,7 @@ export class Orchestrator {
       results,
     };
 
-    logger.info(summary, "Orchestration completed");
+    logger.info(summary, 'Orchestration completed');
 
     return summary;
   }
@@ -149,11 +153,9 @@ export class Orchestrator {
     resources: DiscoveredResource[],
     action: LambdaAction
   ): Promise<HandlerResult[]> {
-    logger.warn("Parallel execution ignores priority-based dependencies");
+    logger.warn('Parallel execution ignores priority-based dependencies');
 
-    const promises = resources.map(resource =>
-      this.processResource(resource, action)
-    );
+    const promises = resources.map((resource) => this.processResource(resource, action));
 
     return await Promise.all(promises);
   }
@@ -173,38 +175,45 @@ export class Orchestrator {
   ): Promise<HandlerResult[]> {
     const groups = this.groupByPriority(resources);
 
-    logger.info({
-      groupCount: groups.length,
-      groupSizes: groups.map(g => g.length),
-    }, "Grouped resources by priority");
+    logger.info(
+      {
+        groupCount: groups.length,
+        groupSizes: groups.map((g) => g.length),
+      },
+      'Grouped resources by priority'
+    );
 
     const allResults: HandlerResult[] = [];
 
     // Process each priority group sequentially
     for (const group of groups) {
-      logger.debug({
-        priority: group[0]?.priority,
-        resourceCount: group.length,
-      }, "Processing priority group");
+      logger.debug(
+        {
+          priority: group[0]?.priority,
+          resourceCount: group.length,
+        },
+        'Processing priority group'
+      );
 
       // Within each group, process resources in parallel
-      const groupPromises = group.map(resource =>
-        this.processResource(resource, action)
-      );
+      const groupPromises = group.map((resource) => this.processResource(resource, action));
 
       const groupResults = await Promise.all(groupPromises);
       allResults.push(...groupResults);
 
       // Log group completion
-      const groupSucceeded = groupResults.filter(r => r.success).length;
-      const groupFailed = groupResults.filter(r => !r.success).length;
+      const groupSucceeded = groupResults.filter((r) => r.success).length;
+      const groupFailed = groupResults.filter((r) => !r.success).length;
 
-      logger.info({
-        priority: group[0]?.priority,
-        total: group.length,
-        succeeded: groupSucceeded,
-        failed: groupFailed,
-      }, "Priority group completed");
+      logger.info(
+        {
+          priority: group[0]?.priority,
+          total: group.length,
+          succeeded: groupSucceeded,
+          failed: groupFailed,
+        },
+        'Priority group completed'
+      );
     }
 
     return allResults;
@@ -223,17 +232,16 @@ export class Orchestrator {
     action: LambdaAction
   ): Promise<HandlerResult> {
     try {
-      const handler = getHandler(
-        resource.resourceType,
-        resource,
-        this.config
-      );
+      const handler = getHandler(resource.resourceType, resource, this.config);
 
       if (!handler) {
-        logger.warn({
-          resourceId: resource.resourceId,
-          resourceType: resource.resourceType,
-        }, "No handler available for resource type");
+        logger.warn(
+          {
+            resourceId: resource.resourceId,
+            resourceType: resource.resourceType,
+          },
+          'No handler available for resource type'
+        );
 
         return {
           success: false,
@@ -241,7 +249,7 @@ export class Orchestrator {
           resourceType: resource.resourceType,
           resourceId: resource.resourceId,
           message: `No handler available for resource type: ${resource.resourceType}`,
-          error: "HANDLER_NOT_FOUND",
+          error: 'HANDLER_NOT_FOUND',
         };
       }
 
@@ -249,30 +257,33 @@ export class Orchestrator {
       let result: HandlerResult;
 
       switch (action) {
-        case "start":
+        case 'start':
           result = await handler.start();
           break;
-        case "stop":
+        case 'stop':
           result = await handler.stop();
           break;
-        case "status": {
+        case 'status': {
           const status = await handler.getStatus();
           result = {
             success: true,
-            action: "status",
+            action: 'status',
             resourceType: resource.resourceType,
             resourceId: resource.resourceId,
-            message: "Status retrieved successfully",
+            message: 'Status retrieved successfully',
             previousState: status,
           };
           break;
         }
         default:
           // This should never happen due to type safety, but keep for defensive coding
-          logger.error({
-            action,
-            resourceId: resource.resourceId,
-          }, "Invalid action");
+          logger.error(
+            {
+              action,
+              resourceId: resource.resourceId,
+            },
+            'Invalid action'
+          );
 
           return {
             success: false,
@@ -280,17 +291,20 @@ export class Orchestrator {
             resourceType: resource.resourceType,
             resourceId: resource.resourceId,
             message: `Invalid action: ${action}`,
-            error: "INVALID_ACTION",
+            error: 'INVALID_ACTION',
           };
       }
 
       return result;
     } catch (error) {
-      logger.error({
-        resourceId: resource.resourceId,
-        resourceType: resource.resourceType,
-        error: String(error),
-      }, "Failed to process resource");
+      logger.error(
+        {
+          resourceId: resource.resourceId,
+          resourceType: resource.resourceType,
+          error: String(error),
+        },
+        'Failed to process resource'
+      );
 
       return {
         success: false,
@@ -310,9 +324,7 @@ export class Orchestrator {
    * @param resources - Resources to group (should already be sorted)
    * @returns Array of resource groups, ordered by priority
    */
-  private groupByPriority(
-    resources: DiscoveredResource[]
-  ): DiscoveredResource[][] {
+  private groupByPriority(resources: DiscoveredResource[]): DiscoveredResource[][] {
     const groups: DiscoveredResource[][] = [];
     let currentGroup: DiscoveredResource[] = [];
     let currentPriority: number | null = null;
@@ -358,12 +370,12 @@ export class Orchestrator {
     action: LambdaAction
   ): DiscoveredResource[] {
     // Only sort for start/stop operations
-    if (action !== "start" && action !== "stop") {
+    if (action !== 'start' && action !== 'stop') {
       return resources;
     }
 
     const sorted = [...resources].sort((a, b) => {
-      if (action === "start") {
+      if (action === 'start') {
         // Ascending: lower priority first
         return a.priority - b.priority;
       } else {
@@ -372,11 +384,14 @@ export class Orchestrator {
       }
     });
 
-    logger.debug({
-      action,
-      sortOrder: action === "start" ? "ascending" : "descending",
-      priorities: sorted.map(r => ({ id: r.resourceId, priority: r.priority })),
-    }, "Resources sorted by priority");
+    logger.debug(
+      {
+        action,
+        sortOrder: action === 'start' ? 'ascending' : 'descending',
+        priorities: sorted.map((r) => ({ id: r.resourceId, priority: r.priority })),
+      },
+      'Resources sorted by priority'
+    );
 
     return sorted;
   }

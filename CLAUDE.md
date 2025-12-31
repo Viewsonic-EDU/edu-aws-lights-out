@@ -72,6 +72,16 @@ lights-out:priority = 100    # 數字越小越優先（啟動先/關閉後）
 
 **Why:** 避免意外執行測試或部署影響 AWS 資源狀態。
 
+**CRITICAL - 依賴管理 (Dependency Management):**
+
+遇到依賴相關問題時（版本衝突、API 變更、配置格式等），**必須**先使用 Context7 MCP 取得最新文檔：
+
+- ✅ 使用 `mcp__context7__resolve-library-id` 查詢 library ID
+- ✅ 使用 `mcp__context7__query-docs` 取得版本資訊與最新文檔
+- ✅ 適用場景：ESLint、Prettier、Husky、AWS SDK、Serverless Framework 等工具
+
+**Why:** 避免使用過時的配置格式或 API（如 ESLint v9 flat config、Husky v9 移除 `husky install`）。
+
 ## ECS Auto Scaling 整合
 
 **問題：** ECS Services 若有 Application Auto Scaling，直接設定 `desiredCount` 會與 scaling policies 衝突。
@@ -110,6 +120,7 @@ resource_defaults:
 ### Issue #1: Serverless Framework + AWS SSO Credentials
 
 **問題：** `serverless deploy` 無法正確處理 AWS SSO credentials，出現：
+
 ```
 EHOSTUNREACH 169.254.169.254:80
 Could not load credentials from any providers

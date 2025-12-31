@@ -5,6 +5,7 @@
 ## 前置條件
 
 ### 必要工具
+
 - **Node.js:** 20.x (嚴格要求，使用 nvm 管理版本)
 - **pnpm:** 最新版本 (`npm install -g pnpm`)
 - **AWS CLI:** 已設定且能成功執行 `aws sts get-caller-identity`
@@ -12,7 +13,9 @@
 - **jq:** JSON 處理工具 (用於驗證)
 
 ### AWS 權限
+
 部署此專案需要以下權限（建議使用 AdministratorAccess 進行首次部署）：
+
 - Lambda 建立與管理
 - IAM Role 建立
 - SSM Parameter 存取
@@ -28,11 +31,13 @@
 ### Serverless Framework 版本選擇
 
 **使用 v3.39.0（非 v4）原因:**
+
 - Serverless Framework v4 對年營收 >$2M 組織要求付費訂閱
 - 本專案為 PoC 性質，使用免費的 v3 版本
 - v3 與 v4 功能差異對本專案無影響
 
 **相容性配置:**
+
 - `serverless@3.39.0` + `serverless-esbuild@1.57.0`
 - Node.js 20.x runtime (Lambda 與本地環境一致)
 - `provider.runtime` 必須在 `serverless.yml` provider 層級明確定義
@@ -40,6 +45,7 @@
 ### SSM Parameter 創建方式
 
 **採用手動創建（非 CloudFormation）原因:**
+
 - CloudFormation Early Validation 對 SSM Parameter Value 格式過於嚴格
 - YAML 配置轉 JSON 字串時的換行符問題難以在 CloudFormation 中處理
 - 手動創建提供更好的靈活性和可維護性
@@ -61,7 +67,7 @@ cd aws-lights-out-plan
 pnpm install
 
 # 3. 型別檢查
-pnpm run type-check
+pnpm run type:check
 ```
 
 ### Step 2: 配置檔案準備
@@ -70,7 +76,7 @@ pnpm run type-check
 
 #### 配置檔案結構（推薦）
 
-```
+```ini
 config/
 ├── sss-lab.yml       # 唯一配置來源（YAML 格式，human-readable）
 ├── sss-dev.yml       # 其他環境配置
@@ -99,34 +105,34 @@ yamllint config/your-stage.yml
 **關鍵配置說明:**
 
 ```yaml
-version: "1.0"
-environment: sss-lab           # 環境識別符（對應 AWS 帳號別名）
+version: '1.0'
+environment: sss-lab # 環境識別符（對應 AWS 帳號別名）
 
-regions:                       # 資源掃描的 AWS Regions（支援多 Region）
+regions: # 資源掃描的 AWS Regions（支援多 Region）
   - ap-southeast-1
   - ap-northeast-1
 
 discovery:
   method: tags
-  tags:                        # 資源必須有這些標籤才會被管理
-    lights-out:managed: "true"
+  tags: # 資源必須有這些標籤才會被管理
+    lights-out:managed: 'true'
     lights-out:env: sss-lab
   resource_types:
-    - ecs:service              # 支援的資源類型
+    - ecs:service # 支援的資源類型
     - rds:db
 
 schedules:
   default:
-    timezone: Asia/Taipei      # 時區設定
-    startTime: "09:00"         # 每天啟動時間
-    stopTime: "19:00"          # 每天關閉時間
-    activeDays:                # 工作日
+    timezone: Asia/Taipei # 時區設定
+    startTime: '09:00' # 每天啟動時間
+    stopTime: '19:00' # 每天關閉時間
+    activeDays: # 工作日
       - MON
       - TUE
       - WED
       - THU
       - FRI
-    holidays: []               # 國定假日清單（YYYY-MM-DD）
+    holidays: [] # 國定假日清單（YYYY-MM-DD）
 ```
 
 ### Step 3: AWS Credentials 設定
@@ -156,14 +162,17 @@ npx serverless deploy --stage sss-lab
 ```
 
 **常見問題:**
+
 - **錯誤:** `Credentials were refreshed, but the refreshed credentials are still expired.`
+
 - **解決:** 完全清除並重新登入
-  ```bash
-  rm -rf ~/.aws/login/
-  rm -rf ~/.aws/cli/cache/
-  aws login
-  eval $(aws configure export-credentials --format env)
-  ```
+
+```bash
+rm -rf ~/.aws/login/
+rm -rf ~/.aws/cli/cache/
+aws login
+eval $(aws configure export-credentials --format env)
+```
 
 #### 方法 B: 配置 SSO Profile（推薦用於日常開發）
 
@@ -196,11 +205,15 @@ npx serverless deploy --stage sss-lab
 #### 方法 C: 從 AWS Console 取得臨時憑證（緊急備案）
 
 1. 登入 AWS Console
+
 2. 搜尋並開啟 **CloudShell**
+
 3. 在 CloudShell 執行：
-   ```bash
-   aws configure export-credentials --format env
-   ```
+
+```bash
+aws configure export-credentials --format env
+```
+
 4. 複製輸出到本地終端執行
 
 ### Step 4: 部署前驗證
@@ -395,6 +408,7 @@ aws lambda invoke \
 ```
 
 **注意:**
+
 - ✅ 使用互動式 CLI 會自動處理所有參數
 - ✅ `discovered_count: 0` 是正常的（尚未標記任何資源）
 - ❌ AWS CLI v1 需要 base64 編碼 payload
@@ -422,6 +436,7 @@ aws logs tail /aws/lambda/lights-out-sss-lab-handler \
 Serverless Framework 會自動建立以下資源：
 
 ### Lambda Function
+
 - **Name:** `lights-out-{stage}-lights-out`
 - **Runtime:** Node.js 20.x
 - **Memory:** 512 MB
@@ -430,6 +445,7 @@ Serverless Framework 會自動建立以下資源：
 - **Package Size:** ~1.3 MB (esbuild 打包後)
 
 ### IAM Role
+
 自動生成，包含以下權限：
 
 ```yaml
@@ -441,34 +457,35 @@ iam:
         Resource: arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/lights-out/*
       - Effect: Allow
         Action: [tag:GetResources]
-        Resource: "*"
+        Resource: '*'
       - Effect: Allow
         Action:
           - ecs:DescribeServices
           - ecs:UpdateService
           - ecs:ListServices
           - ecs:DescribeClusters
-        Resource: "*"
+        Resource: '*'
       - Effect: Allow
         Action:
           - application-autoscaling:DescribeScalableTargets
           - application-autoscaling:RegisterScalableTarget
-        Resource: "*"
+        Resource: '*'
       - Effect: Allow
         Action:
           - rds:DescribeDBInstances
           - rds:StartDBInstance
           - rds:StopDBInstance
-        Resource: "*"
+        Resource: '*'
       - Effect: Allow
         Action:
           - logs:CreateLogGroup
           - logs:CreateLogStream
           - logs:PutLogEvents
-        Resource: "*"
+        Resource: '*'
 ```
 
 ### SSM Parameter (手動創建)
+
 - **Name:** `/lights-out/config`
 - **Type:** String
 - **Value:** JSON 字串（從 `config/{stage}.yml` 轉換）
@@ -477,20 +494,24 @@ iam:
 ### EventBridge Rules
 
 **Start Rule:** `lights-out-{stage}-start`
+
 - **Schedule:** `cron(0 1 ? * MON-FRI *)` (每週一至五 09:00 台北時間 / 01:00 UTC)
 - **Input:** `{"action":"start"}`
 - **Status:** ENABLED
 
 **Stop Rule:** `lights-out-{stage}-stop`
+
 - **Schedule:** `cron(0 11 ? * MON-FRI *)` (每週一至五 19:00 台北時間 / 11:00 UTC)
 - **Input:** `{"action":"stop"}`
 - **Status:** ENABLED
 
 ### CloudWatch Log Group
+
 - **Name:** `/aws/lambda/lights-out-{stage}-lights-out`
 - **Retention:** 無限期 (可手動設定)
 
 ### S3 Deployment Bucket
+
 - **Name:** `lights-out-{stage}-serverlessdeploymentbucket-{hash}`
 - **Purpose:** 儲存 Lambda 部署 artifacts 和 CloudFormation templates
 - **Encryption:** AES256
@@ -502,7 +523,8 @@ iam:
 ### 1. Runtime Not Supported Error
 
 **錯誤訊息:**
-```
+
+```yaml
 AssertionError [ERR_ASSERTION]: not a supported runtime
 ```
 
@@ -516,10 +538,11 @@ AssertionError [ERR_ASSERTION]: not a supported runtime
 provider:
   name: aws
   region: ap-southeast-1
-  runtime: nodejs20.x  # 必須在 provider 層級定義
+  runtime: nodejs20.x # 必須在 provider 層級定義
 ```
 
 **驗證:**
+
 ```bash
 grep "runtime:" serverless.yml
 ```
@@ -529,7 +552,8 @@ grep "runtime:" serverless.yml
 ### 2. AWS Credentials Not Found
 
 **錯誤訊息:**
-```
+
+```ini
 AWS provider credentials not found.
 ```
 
@@ -550,20 +574,24 @@ aws sso login --profile sss-lab
 ```
 
 **常見變體:**
+
 - `Credentials were refreshed, but the refreshed credentials are still expired.`
-  - **解決:** 完全清除 cache 並重新登入
-    ```bash
-    rm -rf ~/.aws/login/ ~/.aws/cli/cache/
-    aws login
-    eval $(aws configure export-credentials --format env)
-    ```
+
+- **解決:** 完全清除 cache 並重新登入
+
+```bash
+rm -rf ~/.aws/login/ ~/.aws/cli/cache/
+aws login
+eval $(aws configure export-credentials --format env)
+```
 
 ---
 
 ### 3. CloudFormation Early Validation Error
 
 **錯誤訊息:**
-```
+
+```ini
 The following hook(s)/validation failed: [AWS::EarlyValidation::PropertyValidation]
 ```
 
@@ -575,15 +603,17 @@ The following hook(s)/validation failed: [AWS::EarlyValidation::PropertyValidati
 
 ```yaml
 # serverless.yml
-resources: {}  # 移除 LightsOutConfigParameter
+resources: {} # 移除 LightsOutConfigParameter
 ```
 
 手動創建：
+
 ```bash
 pnpm run config:update
 ```
 
 **驗證:**
+
 ```bash
 aws ssm get-parameter --name "/lights-out/config" --region ap-southeast-1
 ```
@@ -593,7 +623,8 @@ aws ssm get-parameter --name "/lights-out/config" --region ap-southeast-1
 ### 4. SSM Parameter Tags 和 Overwrite 衝突
 
 **錯誤訊息:**
-```
+
+```yaml
 ValidationException: tags and overwrite can't be used together
 ```
 
@@ -624,7 +655,8 @@ aws ssm add-tags-to-resource \
 ### 5. EventBridge Rule Already Exists
 
 **錯誤訊息:**
-```
+
+```sh
 CREATE_FAILED: Resource of type 'AWS::Events::Rule' with identifier 'lights-out-sss-lab-stop' already exists.
 ```
 
@@ -670,7 +702,8 @@ pnpm run config:update
 ### 6. Stack Rollback 無法刪除
 
 **錯誤訊息:**
-```
+
+```sh
 Stack cannot be deleted while in status UPDATE_ROLLBACK_COMPLETE_CLEANUP_IN_PROGRESS
 ```
 
@@ -697,7 +730,8 @@ npx serverless remove --stage sss-lab
 ### 7. Lambda Invoke Payload 格式錯誤
 
 **錯誤訊息:**
-```
+
+```sh
 Invalid base64: "{"action":"discover"}"
 ```
 
@@ -728,7 +762,8 @@ aws lambda invoke \
 ### 8. Node Version Mismatch
 
 **警告訊息:**
-```
+
+```yaml
 WARN Unsupported engine: wanted: {"node":">=20.0.0 <21.0.0"} (current: {"node":"v22.12.0"})
 ```
 
@@ -753,7 +788,8 @@ pnpm install
 ### 9. CloudFormation Intrinsic Function 語法錯誤
 
 **錯誤訊息:**
-```
+
+```yaml
 yamllint: unknown tag !<!Sub>
 ```
 
@@ -777,6 +813,7 @@ Resource:
 ### 10. Discovered Count 為 0
 
 **現象:**
+
 ```json
 {
   "statusCode": 200,
@@ -799,6 +836,7 @@ Resource:
 5. **Region 不匹配** — 確認配置檔案的 `regions` 包含資源所在 region
 
 **驗證:**
+
 ```bash
 # 使用互動式 CLI 重新 discover
 npm run action
@@ -822,7 +860,7 @@ aws logs tail /aws/lambda/lights-out-{stage} \
 vim src/index.ts
 
 # 2. 型別檢查
-npm run type-check
+npm run type:check
 
 # 3. 使用互動式 CLI 部署
 npm run deploy
@@ -889,6 +927,7 @@ aws cloudformation describe-stacks \
 ```
 
 **注意:** `serverless remove` 會刪除：
+
 - ✅ Lambda Function
 - ✅ IAM Role
 - ✅ EventBridge Rules
@@ -928,6 +967,7 @@ npx serverless remove --stage sss-lab
 ### CloudWatch Metrics
 
 Lambda 預設提供的 Metrics:
+
 - **Invocations:** 執行次數
 - **Duration:** 執行時間
 - **Errors:** 錯誤次數
@@ -1032,6 +1072,7 @@ EOF
 ```
 
 **參數說明:**
+
 - `scope`: `"project"` (專案 scope) 或 `"aws-account"` (帳號 scope)
 - `region`: Lambda 部署的 AWS region
 - `stage`: Serverless Framework stage 名稱
@@ -1047,7 +1088,7 @@ EOF
 custom:
   resolveConfigPath:
     pg-development-airsync-dev: pg-development/airsync-dev.yml
-    pg-development-new-service-dev: pg-development/new-service-dev.yml  # 新增
+    pg-development-new-service-dev: pg-development/new-service-dev.yml # 新增
 ```
 
 ### 步驟 4: 標記 AWS 資源
@@ -1128,6 +1169,7 @@ resource_defaults:
 ```
 
 這樣配置的好處：
+
 - 有 Auto Scaling 的 Service 使用 `autoScaling` 配置
 - 無 Auto Scaling 的 Service 使用 `defaultDesiredCount`
 - 同一個 Lambda 可以管理混合模式的 Services
@@ -1151,9 +1193,9 @@ aws application-autoscaling describe-scalable-targets \
 resource_defaults:
   ecs-service:
     autoScaling:
-      minCapacity: 2      # 從步驟 1 取得
-      maxCapacity: 6      # 從步驟 1 取得
-      desiredCount: 3     # 期望的啟動數量
+      minCapacity: 2 # 從步驟 1 取得
+      maxCapacity: 6 # 從步驟 1 取得
+      desiredCount: 3 # 期望的啟動數量
 ```
 
 **步驟 3: 上傳配置**
@@ -1203,10 +1245,11 @@ stopBehavior:
 ```yaml
 stopBehavior:
   mode: reduce_by_count
-  reduceByCount: 1  # 每次減少 1 個 task
+  reduceByCount: 1 # 每次減少 1 個 task
 ```
 
 **範例:** 如果服務當前 desiredCount 為 3
+
 - 第一次執行 stop：3 → 2
 - 第二次執行 stop：2 → 1
 - 第三次執行 stop：1 → 0
@@ -1218,7 +1261,7 @@ stopBehavior:
 ```yaml
 stopBehavior:
   mode: reduce_to_count
-  reduceToCount: 1  # 停止時保留 1 個 task
+  reduceToCount: 1 # 停止時保留 1 個 task
 ```
 
 **使用場景:** 需要保留一個實例處理背景任務或監控。
@@ -1255,6 +1298,7 @@ aws ssm put-parameter \
 ```
 
 **注意:**
+
 - 每個 Region 會建立獨立的 CloudFormation Stack
 - SSM Parameter 需要在每個 Region 單獨創建
 - EventBridge Rules 獨立於各 Region
@@ -1266,9 +1310,9 @@ aws ssm put-parameter \
 
 ```yaml
 regions:
-  - ap-southeast-1  # Singapore
-  - ap-northeast-1  # Tokyo
-  - us-west-2       # Oregon
+  - ap-southeast-1 # Singapore
+  - ap-northeast-1 # Tokyo
+  - us-west-2 # Oregon
 ```
 
 單一 Lambda 部署在一個 Region，但會掃描所有指定的 Regions。
@@ -1278,6 +1322,7 @@ regions:
 ## 成本估算
 
 ### Lambda 費用
+
 - **Free Tier:** 每月 100 萬次請求 + 400,000 GB-秒運算時間
 - **本專案估算:**
   - 每天 2 次執行 (start/stop)
@@ -1288,6 +1333,7 @@ regions:
   - **月費用:** $0 (完全在 Free Tier 內)
 
 ### 其他資源費用
+
 - **SSM Parameter (Standard):** 免費
 - **EventBridge Rules:** 免費 (前 100 萬次事件)
 - **CloudWatch Logs:** 前 5GB 免費，之後 $0.50/GB
@@ -1392,6 +1438,7 @@ graph LR
 ```
 
 **關鍵點：**
+
 - 配置改變無需重新部署 Lambda（熱更新）
 - Lambda 啟動時才讀取 SSM，5 分鐘內用 cache
 - 多環境共用同一個 Lambda，靠 SSM 參數區分
@@ -1442,33 +1489,37 @@ aws ssm get-parameter \
 ### 配置更新最佳實踐
 
 1. **修改前先備份**
-   ```bash
-   # 下載當前配置
-   npm run config
-   # 選擇 "Retrieve" → 複製輸出內容備份
-   ```
+
+```bash
+# 下載當前配置
+npm run config
+# 選擇 "Retrieve" → 複製輸出內容備份
+```
 
 2. **本地驗證 YAML 格式**
-   ```bash
-   # 使用 Python 驗證
-   python3 -c "import yaml; yaml.safe_load(open('config/{stage}.yml'))"
 
-   # 或使用 yamllint
-   yamllint config/{stage}.yml
-   ```
+```bash
+# 使用 Python 驗證
+python3 -c "import yaml; yaml.safe_load(open('config/{stage}.yml'))"
+
+# 或使用 yamllint
+yamllint config/{stage}.yml
+```
 
 3. **上傳配置**
-   ```bash
-   npm run config
-   # 選擇 "Upload"
-   ```
+
+```bash
+npm run config
+# 選擇 "Upload"
+```
 
 4. **驗證配置生效**
-   ```bash
-   # 測試 discover action
-   npm run action
-   # 選擇環境 → 選擇 "Discover"
-   ```
+
+```bash
+# 測試 discover action
+npm run action
+# 選擇環境 → 選擇 "Discover"
+```
 
 ---
 
@@ -1500,9 +1551,9 @@ resource_defaults:
     waitForStable: true
     stableTimeoutSeconds: 300
     autoScaling:
-      minCapacity: 2      # START 時的最小容量
-      maxCapacity: 6      # START 時的最大容量
-      desiredCount: 3     # START 時的目標數量
+      minCapacity: 2 # START 時的最小容量
+      maxCapacity: 6 # START 時的最大容量
+      desiredCount: 3 # START 時的目標數量
 ```
 
 **無 Auto Scaling 的環境（sss-lab）:**
@@ -1520,11 +1571,13 @@ resource_defaults:
 ### 運作邏輯
 
 **START 操作:**
+
 1. 偵測 Service 是否有 Auto Scaling
 2. 如果有：設定 MinCapacity、MaxCapacity 和 desiredCount
 3. 如果無：設定 desiredCount 為 defaultDesiredCount
 
 **STOP 操作:**
+
 1. 偵測 Service 是否有 Auto Scaling
 2. 如果有：設定 MinCapacity=0, MaxCapacity=0, desiredCount=0
 3. 如果無：根據 stopBehavior 設定 desiredCount
@@ -1558,6 +1611,7 @@ aws lambda invoke \
 ## 版本歷史
 
 ### v3.2 (2025-12-30)
+
 - **新功能:** ECS Application Auto Scaling 整合（條件式偵測模式）
 - 新增 IAM 權限：`application-autoscaling:DescribeScalableTargets`, `RegisterScalableTarget`
 - 新增配置欄位：`resource_defaults.ecs-service.autoScaling`
@@ -1565,6 +1619,7 @@ aws lambda invoke \
 - 新增已知問題：Serverless Framework + AWS SSO Credentials
 
 ### v3.1 (2025-12-24)
+
 - **重大變更:** SSM Parameter 改為手動創建（避免 CloudFormation Early Validation 問題）
 - 新增 `pnpm run config:update` 指令
 - 簡化配置檔案結構（僅保留 YAML 格式）
@@ -1574,6 +1629,7 @@ aws lambda invoke \
 - 修正 Lambda invoke payload 格式說明
 
 ### v3.0 (2025-12-24)
+
 - 降級至 Serverless Framework v3.39.0（避免 v4 付費限制）
 - 修復 SSM Parameter Value 型別問題（使用字串化 JSON）
 - 修復 CloudFormation intrinsic function 語法（使用 `Fn::Sub`）
@@ -1582,9 +1638,11 @@ aws lambda invoke \
 - 完善故障排除文件
 
 ### v2.0 (2025-12-24)
+
 - TypeScript 實作，統一使用 Serverless Framework 部署
 - 支援多 Region 資源掃描
 - Tag-based 資源發現機制
 
 ### v1.0 (2025-12-17)
+
 - Python 原型（已移除）

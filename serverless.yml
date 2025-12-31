@@ -4,7 +4,7 @@ provider:
   name: aws
   region: ${opt:region}
   stage: ${opt:stage}
-  runtime: nodejs20.x  # TODO: upgrade to 22.x
+  runtime: nodejs20.x # TODO: upgrade to 22.x
 
   iam:
     role:
@@ -12,34 +12,34 @@ provider:
         - Effect: Allow
           Action: [ssm:GetParameter]
           Resource:
-            Fn::Sub: "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/lights-out/${self:provider.stage}/*"
+            Fn::Sub: 'arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/lights-out/${self:provider.stage}/*'
         - Effect: Allow
           Action: [tag:GetResources]
-          Resource: "*"
+          Resource: '*'
         - Effect: Allow
           Action:
             - ecs:DescribeServices
             - ecs:UpdateService
             - ecs:ListServices
             - ecs:DescribeClusters
-          Resource: "*"
+          Resource: '*'
         - Effect: Allow
           Action:
             - application-autoscaling:DescribeScalableTargets
             - application-autoscaling:RegisterScalableTarget
-          Resource: "*"
+          Resource: '*'
         - Effect: Allow
           Action:
             - rds:DescribeDBInstances
             - rds:StartDBInstance
             - rds:StopDBInstance
-          Resource: "*"
+          Resource: '*'
         - Effect: Allow
           Action:
             - logs:CreateLogGroup
             - logs:CreateLogStream
             - logs:PutLogEvents
-          Resource: "*"
+          Resource: '*'
 
   environment:
     CONFIG_PARAMETER_NAME: /lights-out/${self:provider.stage}/config
@@ -49,7 +49,7 @@ functions:
   handler:
     name: lights-out-${self:provider.stage}
     handler: src/index.main
-    runtime: nodejs20.x  # TODO: upgrade to 22.x
+    runtime: nodejs20.x # TODO: upgrade to 22.x
     timeout: 300
     memorySize: 512
     tags:

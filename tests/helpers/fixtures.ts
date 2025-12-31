@@ -4,13 +4,8 @@
  * Provides reusable test data for unit tests.
  */
 
-import type { Context } from "aws-lambda";
-import type {
-  Config,
-  DiscoveredResource,
-  HandlerResult,
-  OrchestrationResult,
-} from "@/types";
+import type { Context } from 'aws-lambda';
+import type { Config, DiscoveredResource, HandlerResult, OrchestrationResult } from '@/types';
 
 /**
  * Creates a mock AWS Lambda Context.
@@ -18,19 +13,16 @@ import type {
  * @param overrides - Optional overrides for specific context properties
  * @returns Mock Lambda Context
  */
-export function createMockContext(
-  overrides: Partial<Context> = {}
-): Context {
+export function createMockContext(overrides: Partial<Context> = {}): Context {
   const defaultContext: Context = {
     callbackWaitsForEmptyEventLoop: true,
-    functionName: "lights-out-test",
-    functionVersion: "1",
-    invokedFunctionArn:
-      "arn:aws:lambda:us-east-1:123456:function:lights-out-test",
-    memoryLimitInMB: "512",
-    awsRequestId: "test-request-id-123",
-    logGroupName: "/aws/lambda/lights-out-test",
-    logStreamName: "2024/12/22/[$LATEST]abc123",
+    functionName: 'lights-out-test',
+    functionVersion: '1',
+    invokedFunctionArn: 'arn:aws:lambda:us-east-1:123456:function:lights-out-test',
+    memoryLimitInMB: '512',
+    awsRequestId: 'test-request-id-123',
+    logGroupName: '/aws/lambda/lights-out-test',
+    logStreamName: '2024/12/22/[$LATEST]abc123',
     getRemainingTimeInMillis: () => 30000,
     done: () => {},
     fail: () => {},
@@ -48,25 +40,25 @@ export function createMockContext(
  */
 export function createMockConfig(overrides: Partial<Config> = {}): Config {
   const defaultConfig: Config = {
-    version: "1.0",
-    environment: "test",
+    version: '1.0',
+    environment: 'test',
     discovery: {
-      method: "tags",
+      method: 'tags',
       tags: {
-        "lights-out:managed": "true",
+        'lights-out:managed': 'true',
       },
-      resource_types: ["ecs:service", "rds:db"],
+      resource_types: ['ecs:service', 'rds:db'],
     },
     settings: {
-      schedule_tag: "lights-out:schedule",
+      schedule_tag: 'lights-out:schedule',
     },
     resource_defaults: {
-      "ecs-service": {
+      'ecs-service': {
         waitForStable: false,
         stableTimeoutSeconds: 300,
         defaultDesiredCount: 1,
       },
-      "rds-db": {
+      'rds-db': {
         waitForStable: false,
         stableTimeoutSeconds: 600,
       },
@@ -88,19 +80,19 @@ export function createMockResource(
   overrides: Partial<DiscoveredResource> = {}
 ): DiscoveredResource {
   const resourceDefaults: Record<string, Partial<DiscoveredResource>> = {
-    "ecs-service": {
-      arn: "arn:aws:ecs:us-east-1:123456:service/test-cluster/test-service",
-      resourceId: "test-cluster/test-service",
-      metadata: { cluster_name: "test-cluster" },
+    'ecs-service': {
+      arn: 'arn:aws:ecs:us-east-1:123456:service/test-cluster/test-service',
+      resourceId: 'test-cluster/test-service',
+      metadata: { cluster_name: 'test-cluster' },
     },
-    "rds-db": {
-      arn: "arn:aws:rds:us-east-1:123456:db:test-database",
-      resourceId: "test-database",
+    'rds-db': {
+      arn: 'arn:aws:rds:us-east-1:123456:db:test-database',
+      resourceId: 'test-database',
       metadata: {},
     },
-    "rds-cluster": {
-      arn: "arn:aws:rds:us-east-1:123456:cluster:test-cluster",
-      resourceId: "test-cluster",
+    'rds-cluster': {
+      arn: 'arn:aws:rds:us-east-1:123456:cluster:test-cluster',
+      resourceId: 'test-cluster',
       metadata: {},
     },
   };
@@ -110,11 +102,11 @@ export function createMockResource(
   return {
     resourceType,
     arn: defaults.arn || `arn:aws:${resourceType}:us-east-1:123456:resource/test`,
-    resourceId: defaults.resourceId || "test-resource",
+    resourceId: defaults.resourceId || 'test-resource',
     priority: 50,
-    group: "default",
+    group: 'default',
     tags: {
-      "lights-out:managed": "true",
+      'lights-out:managed': 'true',
     },
     metadata: defaults.metadata || {},
     ...overrides,
@@ -137,15 +129,15 @@ export function createMockHandlerResult(
   const defaultResult: HandlerResult = {
     success,
     action,
-    resourceType: "ecs-service",
-    resourceId: "test-cluster/test-service",
+    resourceType: 'ecs-service',
+    resourceId: 'test-cluster/test-service',
     message: success
       ? `${action.charAt(0).toUpperCase() + action.slice(1)} successful`
       : `${action.charAt(0).toUpperCase() + action.slice(1)} failed`,
   };
 
   if (!success) {
-    defaultResult.error = "Operation failed";
+    defaultResult.error = 'Operation failed';
   }
 
   return { ...defaultResult, ...overrides };
@@ -183,7 +175,7 @@ export function createMockOrchestrationResult(
  */
 export function createMockResourceList(
   count: number,
-  resourceType: string = "ecs-service"
+  resourceType: string = 'ecs-service'
 ): DiscoveredResource[] {
   return Array.from({ length: count }, (_, index) =>
     createMockResource(resourceType, {
@@ -201,10 +193,10 @@ export function createMockResourceList(
  * @param code - Optional error code
  * @returns Error instance
  */
-export function createMockError(message: string, code?: string): Error {
-  const error = new Error(message);
+export function createMockError(message: string, code?: string): Error & { code?: string } {
+  const error = new Error(message) as Error & { code?: string };
   if (code) {
-    (error as any).code = code;
+    error.code = code;
   }
   return error;
 }

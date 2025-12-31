@@ -10,14 +10,14 @@ import {
   UpdateServiceCommand,
   waitUntilServicesStable,
   type Service,
-} from "@aws-sdk/client-ecs";
+} from '@aws-sdk/client-ecs';
 import {
   ApplicationAutoScalingClient,
   DescribeScalableTargetsCommand,
   RegisterScalableTargetCommand,
   ServiceNamespace,
-} from "@aws-sdk/client-application-auto-scaling";
-import type { Logger } from "pino";
+} from '@aws-sdk/client-application-auto-scaling';
+import type { Logger } from 'pino';
 import type {
   DiscoveredResource,
   Config,
@@ -25,9 +25,9 @@ import type {
   ResourceHandler,
   ECSStopBehavior,
   ECSAutoScalingConfig,
-} from "@/types";
-import { setupLogger } from "@utils/logger";
-import { getResourceDefaults } from "@handlers/base";
+} from '@/types';
+import { setupLogger } from '@utils/logger';
+import { getResourceDefaults } from '@handlers/base';
 
 /**
  * Handler for AWS ECS Service resources.
@@ -43,14 +43,17 @@ export class ECSServiceHandler implements ResourceHandler {
   private serviceName: string;
   private logger: Logger;
 
-  constructor(private resource: DiscoveredResource, private config: Config) {
+  constructor(
+    private resource: DiscoveredResource,
+    private config: Config
+  ) {
     this.logger = setupLogger(`lights-out:handler.${resource.resourceType}`);
 
     // Extract region from ARN (format: arn:aws:ecs:REGION:account:...)
     // Falls back to AWS_DEFAULT_REGION environment variable if not in ARN
     let region: string | undefined;
-    if (resource.arn?.startsWith("arn:aws:")) {
-      const arnParts = resource.arn.split(":");
+    if (resource.arn?.startsWith('arn:aws:')) {
+      const arnParts = resource.arn.split(':');
       if (arnParts.length >= 4) {
         region = arnParts[3];
       }
@@ -63,12 +66,12 @@ export class ECSServiceHandler implements ResourceHandler {
     this.autoScalingClient = new ApplicationAutoScalingClient({ region });
 
     // Extract cluster and service names from resource
-    this.clusterName = (resource.metadata.cluster_name as string) ?? "default";
+    this.clusterName = (resource.metadata.cluster_name as string) ?? 'default';
 
     // Extract service name from resource_id
     // Format can be "cluster/service" or just "service"
-    if (resource.resourceId.includes("/")) {
-      this.serviceName = resource.resourceId.split("/").pop()!;
+    if (resource.resourceId.includes('/')) {
+      this.serviceName = resource.resourceId.split('/').pop()!;
     } else {
       this.serviceName = resource.resourceId;
     }
@@ -95,15 +98,13 @@ export class ECSServiceHandler implements ResourceHandler {
       );
 
       if (!response.services || response.services.length === 0) {
-        throw new Error(
-          `Service ${this.serviceName} not found in cluster ${this.clusterName}`
-        );
+        throw new Error(`Service ${this.serviceName} not found in cluster ${this.clusterName}`);
       }
 
       const service: Service = response.services[0];
       const desiredCount = service.desiredCount ?? 0;
       const runningCount = service.runningCount ?? 0;
-      const status = service.status ?? "UNKNOWN";
+      const status = service.status ?? 'UNKNOWN';
 
       return {
         desired_count: desiredCount,
@@ -140,7 +141,7 @@ export class ECSServiceHandler implements ResourceHandler {
         new DescribeScalableTargetsCommand({
           ServiceNamespace: ServiceNamespace.ECS,
           ResourceIds: [resourceId],
-          ScalableDimension: "ecs:service:DesiredCount",
+          ScalableDimension: 'ecs:service:DesiredCount',
         })
       );
 
@@ -153,7 +154,7 @@ export class ECSServiceHandler implements ResourceHandler {
             minCapacity: target.MinCapacity,
             maxCapacity: target.MaxCapacity,
           },
-          "Detected Auto Scaling configuration"
+          'Detected Auto Scaling configuration'
         );
 
         return {
@@ -164,7 +165,7 @@ export class ECSServiceHandler implements ResourceHandler {
 
       this.logger.debug(
         { cluster: this.clusterName, service: this.serviceName },
-        "No Auto Scaling detected"
+        'No Auto Scaling detected'
       );
       return null;
     } catch (error) {
@@ -175,7 +176,7 @@ export class ECSServiceHandler implements ResourceHandler {
           service: this.serviceName,
           error,
         },
-        "Failed to detect Auto Scaling, assuming none"
+        'Failed to detect Auto Scaling, assuming none'
       );
       return null;
     }
@@ -203,7 +204,7 @@ export class ECSServiceHandler implements ResourceHandler {
         maxCapacity,
         desiredCount,
       },
-      "Managing service via Auto Scaling"
+      'Managing service via Auto Scaling'
     );
 
     // 1. Register/update Scalable Target
@@ -211,7 +212,7 @@ export class ECSServiceHandler implements ResourceHandler {
       new RegisterScalableTargetCommand({
         ServiceNamespace: ServiceNamespace.ECS,
         ResourceId: resourceId,
-        ScalableDimension: "ecs:service:DesiredCount",
+        ScalableDimension: 'ecs:service:DesiredCount',
         MinCapacity: minCapacity,
         MaxCapacity: maxCapacity,
       })
@@ -233,7 +234,7 @@ export class ECSServiceHandler implements ResourceHandler {
           service: this.serviceName,
           desiredCount,
         },
-        "Updated service desiredCount"
+        'Updated service desiredCount'
       );
     }
   }
@@ -257,7 +258,7 @@ export class ECSServiceHandler implements ResourceHandler {
           service: this.serviceName,
           current_desired_count: currentStatus.desired_count,
         },
-        "Attempting to stop service"
+        'Attempting to stop service'
       );
 
       // Detect if service has Auto Scaling
@@ -269,14 +270,14 @@ export class ECSServiceHandler implements ResourceHandler {
         if (currentStatus.desired_count === 0) {
           this.logger.info(
             { cluster: this.clusterName, service: this.serviceName },
-            "Service already stopped"
+            'Service already stopped'
           );
           return {
             success: true,
-            action: "stop",
+            action: 'stop',
             resourceType: this.resource.resourceType,
             resourceId: this.resource.resourceId,
-            message: "Service already stopped",
+            message: 'Service already stopped',
             previousState: currentStatus,
           };
         }
@@ -291,31 +292,31 @@ export class ECSServiceHandler implements ResourceHandler {
 
         return {
           success: true,
-          action: "stop",
+          action: 'stop',
           resourceType: this.resource.resourceType,
           resourceId: this.resource.resourceId,
-          message: `Service stopped via Auto Scaling (was ${currentStatus.desired_count})`,
+          message: `Service stopped via Auto Scaling (was ${currentStatus.desired_count as number})`,
           previousState: currentStatus,
         };
       }
 
       // Path 2: No Auto Scaling (Legacy Mode)
       const stopBehavior = (defaults.stopBehavior as ECSStopBehavior) ?? {
-        mode: "scale_to_zero",
+        mode: 'scale_to_zero',
       };
 
       let targetCount: number;
       switch (stopBehavior.mode) {
-        case "scale_to_zero":
+        case 'scale_to_zero':
           targetCount = 0;
           break;
-        case "reduce_by_count":
+        case 'reduce_by_count':
           targetCount = Math.max(
             0,
             (currentStatus.desired_count as number) - (stopBehavior.reduceByCount ?? 1)
           );
           break;
-        case "reduce_to_count":
+        case 'reduce_to_count':
           targetCount = stopBehavior.reduceToCount ?? 0;
           break;
         default:
@@ -325,7 +326,7 @@ export class ECSServiceHandler implements ResourceHandler {
       if (currentStatus.desired_count === targetCount) {
         return {
           success: true,
-          action: "stop",
+          action: 'stop',
           resourceType: this.resource.resourceType,
           resourceId: this.resource.resourceId,
           message: `Service already at target count ${targetCount}`,
@@ -348,23 +349,23 @@ export class ECSServiceHandler implements ResourceHandler {
 
       return {
         success: true,
-        action: "stop",
+        action: 'stop',
         resourceType: this.resource.resourceType,
         resourceId: this.resource.resourceId,
-        message: `Service scaled to ${targetCount} (legacy mode, was ${currentStatus.desired_count})`,
+        message: `Service scaled to ${targetCount} (legacy mode, was ${currentStatus.desired_count as number})`,
         previousState: currentStatus,
       };
     } catch (error) {
       this.logger.error(
         { cluster: this.clusterName, service: this.serviceName, error },
-        "Failed to stop service"
+        'Failed to stop service'
       );
       return {
         success: false,
-        action: "stop",
+        action: 'stop',
         resourceType: this.resource.resourceType,
         resourceId: this.resource.resourceId,
-        message: "Stop operation failed",
+        message: 'Stop operation failed',
         error: error instanceof Error ? error.message : String(error),
       };
     }
@@ -390,7 +391,7 @@ export class ECSServiceHandler implements ResourceHandler {
           service: this.serviceName,
           current_desired_count: currentStatus.desired_count,
         },
-        "Attempting to start service"
+        'Attempting to start service'
       );
 
       // Detect if service has Auto Scaling
@@ -404,7 +405,7 @@ export class ECSServiceHandler implements ResourceHandler {
         if (!autoScalingConfig) {
           throw new Error(
             `Service has Auto Scaling but config lacks autoScaling settings. ` +
-            `Please add resource_defaults.ecs-service.autoScaling to config.`
+              `Please add resource_defaults.ecs-service.autoScaling to config.`
           );
         }
 
@@ -418,7 +419,7 @@ export class ECSServiceHandler implements ResourceHandler {
           );
           return {
             success: true,
-            action: "start",
+            action: 'start',
             resourceType: this.resource.resourceType,
             resourceId: this.resource.resourceId,
             message: `Service already at desired count ${targetCount}`,
@@ -440,7 +441,7 @@ export class ECSServiceHandler implements ResourceHandler {
 
         return {
           success: true,
-          action: "start",
+          action: 'start',
           resourceType: this.resource.resourceType,
           resourceId: this.resource.resourceId,
           message: `Service started via Auto Scaling (min=${autoScalingConfig.minCapacity}, max=${autoScalingConfig.maxCapacity}, desired=${targetCount})`,
@@ -454,7 +455,7 @@ export class ECSServiceHandler implements ResourceHandler {
       if (currentStatus.desired_count === targetCount) {
         return {
           success: true,
-          action: "start",
+          action: 'start',
           resourceType: this.resource.resourceType,
           resourceId: this.resource.resourceId,
           message: `Service already at desired count ${targetCount}`,
@@ -477,7 +478,7 @@ export class ECSServiceHandler implements ResourceHandler {
 
       return {
         success: true,
-        action: "start",
+        action: 'start',
         resourceType: this.resource.resourceType,
         resourceId: this.resource.resourceId,
         message: `Service scaled to ${targetCount} (legacy mode)`,
@@ -486,14 +487,14 @@ export class ECSServiceHandler implements ResourceHandler {
     } catch (error) {
       this.logger.error(
         { cluster: this.clusterName, service: this.serviceName, error },
-        "Failed to start service"
+        'Failed to start service'
       );
       return {
         success: false,
-        action: "start",
+        action: 'start',
         resourceType: this.resource.resourceType,
         resourceId: this.resource.resourceId,
-        message: "Start operation failed",
+        message: 'Start operation failed',
         error: error instanceof Error ? error.message : String(error),
       };
     }
@@ -531,7 +532,7 @@ export class ECSServiceHandler implements ResourceHandler {
           service: this.serviceName,
           error,
         },
-        "Failed to check if service is ready"
+        'Failed to check if service is ready'
       );
       return false;
     }
@@ -558,7 +559,7 @@ export class ECSServiceHandler implements ResourceHandler {
         timeout,
         max_attempts: maxAttempts,
       },
-      "Starting waiter for service stability"
+      'Starting waiter for service stability'
     );
 
     await waitUntilServicesStable(
@@ -579,7 +580,7 @@ export class ECSServiceHandler implements ResourceHandler {
         cluster: this.clusterName,
         service: this.serviceName,
       },
-      "Service reached stable state"
+      'Service reached stable state'
     );
   }
 }

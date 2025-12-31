@@ -18,15 +18,10 @@ type LogLevel = 'debug' | 'info' | 'warn' | 'error';
  * @param level - Optional log level override
  * @returns Configured Pino logger
  */
-export function setupLogger(
-  name: string = 'lights-out',
-  level?: string
-): pino.Logger {
-  const logLevel: LogLevel = (
-    level?.toLowerCase() ||
+export function setupLogger(name: string = 'lights-out', level?: string): pino.Logger {
+  const logLevel: LogLevel = (level?.toLowerCase() ||
     process.env.LOG_LEVEL?.toLowerCase() ||
-    'info'
-  ) as LogLevel;
+    'info') as LogLevel;
 
   return pino({
     name,

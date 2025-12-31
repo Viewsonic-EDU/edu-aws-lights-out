@@ -6,7 +6,7 @@
  * on a specific AWS resource type (e.g., ECS Service, RDS Instance).
  */
 
-import type { Config } from "@/types";
+import type { Config } from '@/types';
 
 /**
  * Extract resource-type-specific defaults from configuration.
@@ -17,9 +17,6 @@ import type { Config } from "@/types";
  * @param resourceType - Resource type identifier
  * @returns Dictionary of default settings, or empty object if not configured
  */
-export function getResourceDefaults(
-  config: Config,
-  resourceType: string
-): Record<string, unknown> {
+export function getResourceDefaults(config: Config, resourceType: string): Record<string, unknown> {
   return config.resource_defaults?.[resourceType] ?? {};
 }
