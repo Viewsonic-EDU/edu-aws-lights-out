@@ -304,4 +304,305 @@ discovery:
       expect(validationError.name).toBe('ConfigValidationError');
     });
   });
+
+  describe('ECS Action Config Validation', () => {
+    it('should accept valid Auto Scaling mode configuration', async () => {
+      const configWithAutoScaling = `
+version: "1.0"
+environment: test
+discovery:
+  method: tag-based
+resource_defaults:
+  ecs-service:
+    waitForStable: true
+    stableTimeoutSeconds: 300
+    start:
+      minCapacity: 2
+      maxCapacity: 10
+      desiredCount: 5
+    stop:
+      desiredCount: 0
+`;
+
+      ssmMock.on(GetParameterCommand).resolves({
+        Parameter: { Value: configWithAutoScaling },
+      });
+
+      const config = await loadConfigFromSsm('/test/parameter');
+
+      expect(config.resource_defaults).toBeDefined();
+      expect(config.resource_defaults?.['ecs-service'].start).toEqual({
+        minCapacity: 2,
+        maxCapacity: 10,
+        desiredCount: 5,
+      });
+      // stop uses Direct mode (only desiredCount)
+      expect(config.resource_defaults?.['ecs-service'].stop).toEqual({
+        desiredCount: 0,
+      });
+    });
+
+    it('should accept valid Direct mode configuration', async () => {
+      const configWithDirectMode = `
+version: "1.0"
+environment: test
+discovery:
+  method: tag-based
+resource_defaults:
+  ecs-service:
+    start:
+      desiredCount: 2
+    stop:
+      desiredCount: 0
+`;
+
+      ssmMock.on(GetParameterCommand).resolves({
+        Parameter: { Value: configWithDirectMode },
+      });
+
+      const config = await loadConfigFromSsm('/test/parameter');
+
+      expect(config.resource_defaults?.['ecs-service'].start).toEqual({
+        desiredCount: 2,
+      });
+      expect(config.resource_defaults?.['ecs-service'].stop).toEqual({
+        desiredCount: 0,
+      });
+    });
+
+    it('should fallback to Direct mode when Auto Scaling validation fails (minCapacity > maxCapacity)', async () => {
+      const configWithInvalidAutoScaling = `
+version: "1.0"
+environment: test
+discovery:
+  method: tag-based
+resource_defaults:
+  ecs-service:
+    start:
+      minCapacity: 10
+      maxCapacity: 5
+      desiredCount: 7
+`;
+
+      ssmMock.on(GetParameterCommand).resolves({
+        Parameter: { Value: configWithInvalidAutoScaling },
+      });
+
+      const config = await loadConfigFromSsm('/test/parameter');
+
+      // Union schema falls back to Direct mode when Auto Scaling refine fails
+      expect(config.resource_defaults?.['ecs-service'].start).toEqual({
+        desiredCount: 7,
+      });
+    });
+
+    it('should fallback to Direct mode when Auto Scaling validation fails (desiredCount < minCapacity)', async () => {
+      const configWithInvalidAutoScaling = `
+version: "1.0"
+environment: test
+discovery:
+  method: tag-based
+resource_defaults:
+  ecs-service:
+    start:
+      minCapacity: 5
+      maxCapacity: 10
+      desiredCount: 3
+`;
+
+      ssmMock.on(GetParameterCommand).resolves({
+        Parameter: { Value: configWithInvalidAutoScaling },
+      });
+
+      const config = await loadConfigFromSsm('/test/parameter');
+
+      // Union schema falls back to Direct mode
+      expect(config.resource_defaults?.['ecs-service'].start).toEqual({
+        desiredCount: 3,
+      });
+    });
+
+    it('should fallback to Direct mode when Auto Scaling validation fails (desiredCount > maxCapacity)', async () => {
+      const configWithInvalidAutoScaling = `
+version: "1.0"
+environment: test
+discovery:
+  method: tag-based
+resource_defaults:
+  ecs-service:
+    start:
+      minCapacity: 2
+      maxCapacity: 10
+      desiredCount: 15
+`;
+
+      ssmMock.on(GetParameterCommand).resolves({
+        Parameter: { Value: configWithInvalidAutoScaling },
+      });
+
+      const config = await loadConfigFromSsm('/test/parameter');
+
+      // Union schema falls back to Direct mode
+      expect(config.resource_defaults?.['ecs-service'].start).toEqual({
+        desiredCount: 15,
+      });
+    });
+
+    it('should reject negative desiredCount in Direct mode', async () => {
+      const invalidConfig = `
+version: "1.0"
+environment: test
+discovery:
+  method: tag-based
+resource_defaults:
+  ecs-service:
+    start:
+      desiredCount: -1
+`;
+
+      ssmMock.on(GetParameterCommand).resolves({
+        Parameter: { Value: invalidConfig },
+      });
+
+      await expect(loadConfigFromSsm('/test/parameter')).rejects.toThrow(ConfigValidationError);
+    });
+  });
+
+  describe('Optional Fields Validation', () => {
+    it('should accept configuration with regions field', async () => {
+      const configWithRegions = `
+version: "1.0"
+environment: test
+regions:
+  - us-east-1
+  - ap-southeast-1
+discovery:
+  method: tag-based
+`;
+
+      ssmMock.on(GetParameterCommand).resolves({
+        Parameter: { Value: configWithRegions },
+      });
+
+      const config = await loadConfigFromSsm('/test/parameter');
+
+      expect(config.regions).toEqual(['us-east-1', 'ap-southeast-1']);
+    });
+
+    it('should accept configuration with settings field', async () => {
+      const configWithSettings = `
+version: "1.0"
+environment: test
+discovery:
+  method: tag-based
+settings:
+  schedule_tag: lights-out:schedule
+`;
+
+      ssmMock.on(GetParameterCommand).resolves({
+        Parameter: { Value: configWithSettings },
+      });
+
+      const config = await loadConfigFromSsm('/test/parameter');
+
+      expect(config.settings).toBeDefined();
+      expect(config.settings?.schedule_tag).toBe('lights-out:schedule');
+    });
+
+    it('should accept configuration with resource_types in discovery', async () => {
+      const configWithResourceTypes = `
+version: "1.0"
+environment: test
+discovery:
+  method: tag-based
+  resource_types:
+    - ecs:service
+    - rds:db
+`;
+
+      ssmMock.on(GetParameterCommand).resolves({
+        Parameter: { Value: configWithResourceTypes },
+      });
+
+      const config = await loadConfigFromSsm('/test/parameter');
+
+      expect(config.discovery.resource_types).toEqual(['ecs:service', 'rds:db']);
+    });
+
+    it('should accept configuration with all ECS service optional fields', async () => {
+      const configWithAllFields = `
+version: "1.0"
+environment: test
+discovery:
+  method: tag-based
+resource_defaults:
+  ecs-service:
+    waitForStable: true
+    stableTimeoutSeconds: 600
+    start:
+      desiredCount: 3
+    stop:
+      desiredCount: 0
+  rds-db:
+    waitForStable: false
+    stableTimeoutSeconds: 300
+`;
+
+      ssmMock.on(GetParameterCommand).resolves({
+        Parameter: { Value: configWithAllFields },
+      });
+
+      const config = await loadConfigFromSsm('/test/parameter');
+
+      expect(config.resource_defaults?.['ecs-service'].waitForStable).toBe(true);
+      expect(config.resource_defaults?.['ecs-service'].stableTimeoutSeconds).toBe(600);
+      expect(config.resource_defaults?.['rds-db'].waitForStable).toBe(false);
+      expect(config.resource_defaults?.['rds-db'].stableTimeoutSeconds).toBe(300);
+    });
+  });
+
+  describe('Custom SSM Client', () => {
+    it('should accept custom SSM client for testing', async () => {
+      const customClient = new SSMClient({});
+      const customMock = mockClient(customClient);
+
+      const validConfig = `
+version: "1.0"
+environment: test
+discovery:
+  method: tag-based
+`;
+
+      customMock.on(GetParameterCommand).resolves({
+        Parameter: { Value: validConfig },
+      });
+
+      const config = await loadConfigFromSsm('/test/parameter', customClient);
+
+      expect(config).toBeDefined();
+      expect(config.version).toBe('1.0');
+
+      customMock.restore();
+    });
+  });
+
+  describe('Schema Validation Error Handling', () => {
+    it('should handle validation errors for invalid stableTimeoutSeconds', async () => {
+      const config = `
+version: "1.0"
+environment: test
+discovery:
+  method: tag-based
+resource_defaults:
+  ecs-service:
+    stableTimeoutSeconds: 0
+`;
+
+      ssmMock.on(GetParameterCommand).resolves({
+        Parameter: { Value: config },
+      });
+
+      await expect(loadConfigFromSsm('/test/parameter')).rejects.toThrow(ConfigValidationError);
+    });
+  });
 });
