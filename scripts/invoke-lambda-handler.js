@@ -1,10 +1,11 @@
 #!/usr/bin/env node
+/* eslint-disable no-undef */
 
 /**
  * Invoke AWS Lambda function with specified action
  *
  * Usage:
- *   node scripts/invoke-lambda.js \
+ *   node scripts/invoke-lambda-handler.js \
  *     --function-name "lights-out-dev" \
  *     --action "start" \
  *     --region "us-east-1"
@@ -34,7 +35,7 @@ function validateParams(params) {
   if (missing.length > 0) {
     console.error(`❌ Missing required parameters: ${missing.join(', ')}`);
     console.error('\nUsage:');
-    console.error('  node scripts/invoke-lambda.js \\');
+    console.error('  node scripts/invoke-lambda-handler.js \\');
     console.error('    --function-name "lights-out-dev" \\');
     console.error('    --action "start|stop|status|discover" \\');
     console.error('    --region "aws-region"');
@@ -122,7 +123,6 @@ async function main() {
 
     if (error.name === 'ResourceNotFoundException') {
       console.error('\n💡 Hint: Function not found. Make sure it has been deployed.');
-      console.error('   Deploy with: npm run airsync-dev:serverless');
     } else if (error.name === 'AccessDeniedException') {
       console.error('\n💡 Hint: Permission denied. Make sure your AWS profile has lambda:InvokeFunction permission.');
     }

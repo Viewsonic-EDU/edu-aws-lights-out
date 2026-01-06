@@ -1,4 +1,6 @@
 #!/usr/bin/env node
+/* eslint-disable no-unused-vars */
+/* eslint-disable no-undef */
 
 /**
  * Generate AWS EventBridge cron expressions from human-readable schedule configurations

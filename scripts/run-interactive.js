@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+/* eslint-disable no-undef */
 
 /**
  * Interactive command runner with prompts
@@ -7,12 +8,14 @@
  *   node scripts/run-interactive.js --mode action
  *   node scripts/run-interactive.js --mode config
  *   node scripts/run-interactive.js --mode deploy
+ *   node scripts/run-interactive.js --mode teams
  */
 
 const { execSync } = require('child_process');
 const prompts = require('prompts');
 const path = require('path');
 const fs = require('fs');
+const { setupAwsCredentials } = require('./aws-credentials');
 
 // Discover available targets from arguments directory
 function getAvailableTargets() {
@@ -45,15 +48,15 @@ const MODES = {
     title: 'Lambda Action',
     choices: [
       {
-        title: '▶️  Start   - Start all managed resources',
+        title: '▶️  Start    - Start all managed resources',
         value: 'start',
       },
       {
-        title: '⏹️  Stop    - Stop all managed resources',
+        title: '⏹️  Stop     - Stop all managed resources',
         value: 'stop',
       },
       {
-        title: '📊 Status  - Check current resource status',
+        title: '📊 Status   - Check current resource status',
         value: 'status',
       },
       {
@@ -61,7 +64,7 @@ const MODES = {
         value: 'discover',
       },
     ],
-    script: 'invoke-lambda',
+    script: 'invoke-lambda-handler',
   },
   config: {
     title: 'SSM Config Management',
@@ -84,15 +87,38 @@ const MODES = {
     title: 'Serverless Deployment',
     choices: [
       {
-        title: '🚀 All          - Full Serverless deployment (infrastructure + Lambda)',
+        title: '🚀 All                              - Full Serverless deployment (infrastructure + Lambda)',
         value: 'all',
       },
       {
-        title: '⚡ Lambda Only  - Quick Lambda function code update only',
-        value: 'lambda-function',
+        title: '⚡ Lambda: Handler function         - Deploy only the Lambda `handler` function',
+        value: 'lambda-function-handler',
+      },
+      {
+        title: '📢 Lambda: TeamsNotifier function   - Deploy only the Lambda `teamsNotifier` function',
+        value: 'lambda-function-teamsNotifier',
       },
     ],
     customCommand: true,
+  },
+  teams: {
+    title: 'Teams Integration Management',
+    choices: [
+      {
+        title: '🔧 Setup Database     - Create DynamoDB table for Teams config',
+        value: 'setup-db',
+      },
+      {
+        title: '➕ Add Project        - Add or update project webhook configuration',
+        value: 'add-project',
+      },
+      {
+        title: '📋 List Projects      - Show all configured projects',
+        value: 'list-projects',
+      },
+    ],
+    customCommand: true,
+    accountScope: true, // Teams operations are account-scoped, not project-scoped
   },
 };
 
@@ -116,11 +142,11 @@ async function main() {
     const params = parseArgs();
 
     if (!params.mode || !MODES[params.mode]) {
-      console.error('❌ Invalid or missing mode. Valid modes: action, config, deploy');
+      console.error('❌ Invalid or missing mode. Valid modes: action, config, deploy, teams');
       console.error('\nUsage:');
-      console.error('  node scripts/run-interactive.js --mode <action|config|deploy>');
+      console.error('  node scripts/run-interactive.js --mode <action|config|deploy|teams>');
       console.error('\nExample:');
-      console.error('  node scripts/run-interactive.js --mode action');
+      console.error('  node scripts/run-interactive.js --mode teams');
       process.exit(1);
     }
 
@@ -168,67 +194,72 @@ async function main() {
 
     console.log(''); // Empty line for spacing
 
+    // Load project arguments (used by all modes)
+    const argFilePath = path.join(__dirname, 'arguments', `${projectName}.json`);
+    const projectArgs = JSON.parse(fs.readFileSync(argFilePath, 'utf8'));
+
     // Handle deploy mode with custom commands
     if (params.mode === 'deploy') {
-      // Load project arguments for region and stage info
-      const argFilePath = path.join(__dirname, 'arguments', `${projectName}.json`);
-      const projectArgs = JSON.parse(fs.readFileSync(argFilePath, 'utf8'));
+      // Validate required fields for deploy mode
+      if (!projectArgs.region) {
+        console.error(`❌ Missing required field: "region" in ${argFilePath}`);
+        console.error('   Please set the "region" field in your project arguments file.');
+        process.exit(1);
+      }
+      if (!projectArgs.stage) {
+        console.error(`❌ Missing required field: "stage" in ${argFilePath}`);
+        console.error('   Please set the "stage" field in your project arguments file.');
+        process.exit(1);
+      }
 
       // Set AWS credentials environment variables
-      const env = { ...process.env };
+      const env = setupAwsCredentials(projectArgs.profile);
 
-      // CRITICAL: Clear all AWS credentials to prevent conflicts with terminal env vars
-      delete env.AWS_PROFILE;
-      delete env.AWS_ACCESS_KEY_ID;
-      delete env.AWS_SECRET_ACCESS_KEY;
-      delete env.AWS_SESSION_TOKEN;
-
-      if (projectArgs.profile) {
-        console.log(`🔑 Using AWS profile: ${projectArgs.profile}`);
-
-        try {
-          // Export SSO credentials as environment variables (most reliable method)
-          // This bypasses serverless-better-credentials issues with SSO
-          const credentialsJson = execSync(
-            `aws configure export-credentials --profile ${projectArgs.profile} --format env-no-export`,
-            { encoding: 'utf8', stdio: ['pipe', 'pipe', 'pipe'] }
-          );
-
-          // Parse and set credentials as environment variables
-          credentialsJson.trim().split('\n').forEach(line => {
-            const [key, value] = line.split('=');
-            if (key && value) {
-              env[key] = value;
-            }
-          });
-
-          console.log('✅ SSO credentials exported successfully');
-        } catch (error) {
-          // Fallback to AWS_PROFILE if export-credentials fails
-          console.warn('⚠️  Could not export SSO credentials, falling back to AWS_PROFILE');
-          console.warn('   If deployment fails, run: aws sso login --profile ' + projectArgs.profile);
-          env.AWS_PROFILE = projectArgs.profile;
-        }
-      }
+      const region = projectArgs.region;
+      const stage = projectArgs.stage;
 
       if (selectedValue === 'all') {
         // Full Serverless deployment
         const configPath = projectArgs.config?.path;
-        const region = projectArgs.region;
-        const stage = projectArgs.stage;
-
-        // Profile is set via env.AWS_PROFILE (see above), no CLI parameter needed
         const command = `node scripts/generate-cron.js --config ${configPath} && serverless deploy --region ${region} --stage ${stage} --verbose`;
         execSync(command, { stdio: 'inherit', env });
-      } else if (selectedValue === 'lambda-function') {
+      } else if( selectedValue.startsWith('lambda-function-')) {
         // Lambda-only deployment
-        const region = projectArgs.region;
-        const stage = projectArgs.stage;
-
-        // Profile is set via env.AWS_PROFILE (see above), no CLI parameter needed
-        const command = `serverless deploy function -f handler --region ${region} --stage ${stage} --verbose`;
+        const functionName = selectedValue.replace('lambda-function-', '');
+        const command = `serverless deploy function -f ${functionName} --region ${region} --stage ${stage} --verbose`;
         execSync(command, { stdio: 'inherit', env });
+      } 
+
+      return;
+    }
+
+    // Handle teams mode with custom commands
+    if (params.mode === 'teams') {
+      // Validate required fields for teams mode
+      if (!projectArgs.region) {
+        console.error(`❌ Missing required field: "region" in ${argFilePath}`);
+        console.error('   Please set the "region" field in your project arguments file.');
+        process.exit(1);
       }
+
+      // Load Teams integration utilities
+      const teamsUtils = require('./teams-utils');
+
+      // Set AWS credentials environment variables
+      const env = setupAwsCredentials(projectArgs.profile);
+      console.log(''); // Empty line for spacing
+
+      const region = projectArgs.region;
+
+      // Execute the selected Teams operation
+      if (selectedValue === 'setup-db') {
+        await teamsUtils.setupDatabase(region, env);
+      } else if (selectedValue === 'add-project') {
+        await teamsUtils.addProject(region, env);
+      } else if (selectedValue === 'list-projects') {
+        await teamsUtils.listProjects(region, env);
+      }
+
       return;
     }
 

@@ -1,16 +1,18 @@
 #!/usr/bin/env node
+/* eslint-disable no-undef */
 
 /**
  * Unified command runner that reads arguments from JSON files
  *
  * Usage:
- *   node scripts/run-command.js --project airsync-dev --script invoke-lambda --action start
+ *   node scripts/run-command.js --project airsync-dev --script invoke-lambda-handler --action start
  *   node scripts/run-command.js --project airsync-dev --script deploy-config
  */
 
 const fs = require('fs');
 const path = require('path');
 const { execSync } = require('child_process');
+const { setupAwsCredentials } = require('./aws-credentials');
 
 // Parse command line arguments
 function parseArgs() {
@@ -50,7 +52,7 @@ function buildCommand(scriptName, projectArgs, extraArgs = {}) {
 
   // Script-specific argument mapping
   const argMappings = {
-    'invoke-lambda': {
+    'invoke-lambda-handler': {
       'function-name': projectArgs['function-name'],
       'region': projectArgs.region,
       'action': extraArgs.action,
@@ -92,7 +94,7 @@ function main() {
       console.error('\nUsage:');
       console.error('  node scripts/run-command.js --project <name> --script <script-name> [--action <action>]');
       console.error('\nExamples:');
-      console.error('  node scripts/run-command.js --project airsync-dev --script invoke-lambda --action start');
+      console.error('  node scripts/run-command.js --project airsync-dev --script invoke-lambda-handler --action start');
       console.error('  node scripts/run-command.js --project airsync-dev --script deploy-config');
       process.exit(1);
     }
@@ -106,40 +108,7 @@ function main() {
     const projectArgs = loadProjectArgs(params.project);
 
     // Set AWS credentials environment variables
-    const env = { ...process.env };
-
-    // CRITICAL: Clear all AWS credentials to prevent conflicts with terminal env vars
-    delete env.AWS_PROFILE;
-    delete env.AWS_ACCESS_KEY_ID;
-    delete env.AWS_SECRET_ACCESS_KEY;
-    delete env.AWS_SESSION_TOKEN;
-
-    if (projectArgs.profile) {
-      console.log(`🔑 Using AWS profile: ${projectArgs.profile}`);
-
-      try {
-        // Export SSO credentials as environment variables (most reliable method)
-        const credentialsJson = execSync(
-          `aws configure export-credentials --profile ${projectArgs.profile} --format env-no-export`,
-          { encoding: 'utf8', stdio: ['pipe', 'pipe', 'pipe'] }
-        );
-
-        // Parse and set credentials as environment variables
-        credentialsJson.trim().split('\n').forEach(line => {
-          const [key, value] = line.split('=');
-          if (key && value) {
-            env[key] = value;
-          }
-        });
-
-        console.log('✅ SSO credentials exported successfully');
-      } catch (error) {
-        // Fallback to AWS_PROFILE if export-credentials fails
-        console.warn('⚠️  Could not export SSO credentials, falling back to AWS_PROFILE');
-        console.warn('   If operation fails, run: aws sso login --profile ' + projectArgs.profile);
-        env.AWS_PROFILE = projectArgs.profile;
-      }
-    }
+    const env = setupAwsCredentials(projectArgs.profile);
 
     // Build and execute command
     const extraArgs = {
