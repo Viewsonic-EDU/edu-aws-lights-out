@@ -17,7 +17,8 @@
     "format:check": "prettier --check \"src/**/*.{ts,json}\" \"tests/**/*.{ts,json}\" \"*.{json,md,yml,yaml}\"",
     "action": "node scripts/run-interactive.js --mode action",
     "config": "node scripts/run-interactive.js --mode config",
-    "deploy": "node scripts/run-interactive.js --mode deploy"
+    "deploy": "node scripts/run-interactive.js --mode deploy",
+    "teams": "node scripts/run-interactive.js --mode teams"
   },
   "keywords": [
     "aws",
@@ -29,15 +30,18 @@
   "license": "ISC",
   "dependencies": {
     "@aws-sdk/client-application-auto-scaling": "^3.954.0",
+    "@aws-sdk/client-dynamodb": "^3.954.0",
     "@aws-sdk/client-ecs": "^3.954.0",
     "@aws-sdk/client-lambda": "^3.954.0",
     "@aws-sdk/client-rds": "^3.954.0",
     "@aws-sdk/client-resource-groups-tagging-api": "^3.954.0",
     "@aws-sdk/client-ssm": "^3.954.0",
+    "@aws-sdk/lib-dynamodb": "^3.954.0",
     "date-fns": "^4.1.0",
     "date-fns-tz": "^3.2.0",
     "js-yaml": "^4.1.1",
     "lru-cache": "^11.2.4",
+    "node-fetch": "^2.7.0",
     "pino": "^10.1.0",
     "zod": "^3.23.8"
   },
@@ -46,6 +50,7 @@
     "@types/aws-lambda": "^8.10.159",
     "@types/js-yaml": "^4.0.9",
     "@types/node": "^25.0.3",
+    "@types/node-fetch": "^2.6.13",
     "@typescript-eslint/eslint-plugin": "^8.51.0",
     "@typescript-eslint/parser": "^8.51.0",
     "@vitest/coverage-v8": "^4.0.16",

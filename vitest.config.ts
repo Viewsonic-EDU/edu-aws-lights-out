@@ -1,12 +1,13 @@
-import { defineConfig } from "vitest/config";
-import path from "path";
+import { defineConfig } from 'vitest/config';
+import path from 'path';
 
 export default defineConfig({
   test: {
     globals: true,
-    environment: "node",
+    environment: 'node',
+    passWithNoTests: true,
     coverage: {
-      provider: "v8",
+      provider: 'v8',
       thresholds: {
         lines: 80,
         functions: 80,
@@ -14,15 +15,15 @@ export default defineConfig({
         statements: 80,
       },
     },
-    setupFiles: ["./tests/setup.ts"],
+    setupFiles: ['./tests/setup.ts'],
   },
   resolve: {
     alias: {
-      "@": path.resolve(__dirname, "./src"),
-      "@core": path.resolve(__dirname, "./src/core"),
-      "@handlers": path.resolve(__dirname, "./src/handlers"),
-      "@discovery": path.resolve(__dirname, "./src/discovery"),
-      "@utils": path.resolve(__dirname, "./src/utils"),
+      '@': path.resolve(__dirname, './src'),
+      '@core': path.resolve(__dirname, './src/core'),
+      '@handlers': path.resolve(__dirname, './src/handlers'),
+      '@discovery': path.resolve(__dirname, './src/discovery'),
+      '@utils': path.resolve(__dirname, './src/utils'),
     },
   },
 });
