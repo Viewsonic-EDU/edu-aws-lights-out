@@ -6,10 +6,17 @@
  */
 
 import type { Context } from 'aws-lambda';
-import type { LambdaAction, DiscoveryResult, LambdaExecutionResult } from '@shared/types';
+import type {
+  LambdaAction,
+  DiscoveryResult,
+  LambdaExecutionResult,
+  TriggerSource,
+  LambdaEvent,
+} from '@shared/types';
 import { loadConfigFromSsm } from './core/config';
 import { Orchestrator } from './core/orchestrator';
 import { setupLogger } from '@shared/utils/logger';
+import { detectTriggerSource } from '@shared/utils/triggerSourceDetector';
 
 const logger = setupLogger('lights-out:main');
 
@@ -18,14 +25,6 @@ const DEFAULT_CONFIG_PARAMETER = '/lights-out/config';
 
 // Valid actions
 const VALID_ACTIONS: ReadonlySet<string> = new Set(['start', 'stop', 'status', 'discover']);
-
-/**
- * Lambda event structure.
- */
-interface LambdaEvent {
-  action?: string;
-  [key: string]: unknown;
-}
 
 /**
  * Lambda response structure.
@@ -69,6 +68,20 @@ export async function main(event: LambdaEvent, context: Context): Promise<Lambda
   const requestId = context.awsRequestId || 'local-test';
   const functionName = context.functionName || 'lights-out';
 
+  // Detect trigger source
+  let triggerSource: TriggerSource;
+  try {
+    triggerSource = await detectTriggerSource(event, context);
+    logger.info({ triggerSource }, 'Trigger source detected');
+  } catch (error) {
+    logger.warn({ error: String(error) }, 'Failed to detect trigger source, using unknown');
+    triggerSource = {
+      type: 'unknown',
+      identity: context.invokedFunctionArn,
+      displayName: 'Unknown Source',
+    };
+  }
+
   // Extract and validate action
   const actionStr = event.action ?? 'status';
   const action = validateAction(actionStr);
@@ -108,8 +121,8 @@ export async function main(event: LambdaEvent, context: Context): Promise<Lambda
 
     const config = await loadConfigFromSsm(configParameter);
 
-    // Initialize orchestrator
-    const orchestrator = new Orchestrator(config);
+    // Initialize orchestrator with trigger source
+    const orchestrator = new Orchestrator(config, triggerSource);
 
     // Execute action
     if (action === 'discover') {

@@ -12,6 +12,7 @@ import type {
   HandlerResult,
   LambdaAction,
   ExecutionStrategy,
+  TriggerSource,
 } from '@shared/types';
 import { TagDiscovery } from '../discovery/tagDiscovery';
 import { getHandler } from '../handlers/factory';
@@ -21,9 +22,11 @@ const logger = setupLogger('lights-out:orchestrator');
 
 export class Orchestrator {
   private readonly config: Config;
+  private readonly triggerSource?: TriggerSource;
 
-  constructor(config: Config) {
+  constructor(config: Config, triggerSource?: TriggerSource) {
     this.config = config;
+    this.triggerSource = triggerSource;
   }
 
   /**
@@ -294,6 +297,9 @@ export class Orchestrator {
             error: 'INVALID_ACTION',
           };
       }
+
+      // Attach trigger source to result
+      result.triggerSource = this.triggerSource;
 
       return result;
     } catch (error) {

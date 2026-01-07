@@ -6,7 +6,7 @@
  */
 
 import fetch from 'node-fetch';
-import type { HandlerResult, TeamsNotificationConfig } from '@shared/types';
+import type { HandlerResult, TeamsNotificationConfig, TriggerSource } from '@shared/types';
 import { setupLogger } from './logger';
 
 const logger = setupLogger('lights-out:teams-notifier');
@@ -111,6 +111,9 @@ function createActionResultCard(result: HandlerResult, environment: string): obj
   const statusEmoji = result.success ? '✅' : '❌';
   const statusText = result.success ? 'Success' : 'Failed';
 
+  // Format trigger source display
+  const triggerSourceDisplay = formatTriggerSourceDisplay(result.triggerSource);
+
   return {
     type: 'message',
     attachments: [
@@ -137,6 +140,10 @@ function createActionResultCard(result: HandlerResult, environment: string): obj
                 {
                   title: 'Action',
                   value: actionUpper,
+                },
+                {
+                  title: 'Triggered By',
+                  value: triggerSourceDisplay,
                 },
                 {
                   title: 'Resource Type',
@@ -173,4 +180,28 @@ function createActionResultCard(result: HandlerResult, environment: string): obj
       },
     ],
   };
+}
+
+/**
+ * Format trigger source for Teams display.
+ *
+ * @param triggerSource - Trigger source metadata
+ * @returns Formatted display string
+ */
+function formatTriggerSourceDisplay(triggerSource?: TriggerSource): string {
+  if (!triggerSource) {
+    return '🔹 Unknown';
+  }
+
+  switch (triggerSource.type) {
+    case 'eventbridge-scheduled':
+      return `⏰ EventBridge: ${triggerSource.displayName}`;
+    case 'manual-invoke':
+      return `👤 Manual: ${triggerSource.displayName}`;
+    case 'teams-bot':
+      return `💬 Teams Bot: ${triggerSource.displayName}`;
+    case 'unknown':
+    default:
+      return '🔹 Unknown';
+  }
 }

@@ -41,6 +41,10 @@ provider:
             - logs:CreateLogStream
             - logs:PutLogEvents
           Resource: '*'
+        - Effect: Allow
+          Action:
+            - sts:GetCallerIdentity
+          Resource: '*'
 
   environment:
     CONFIG_PARAMETER_NAME: /lights-out/${self:provider.stage}/config

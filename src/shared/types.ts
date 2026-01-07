@@ -10,6 +10,82 @@
 export type LambdaAction = 'start' | 'stop' | 'status' | 'discover';
 
 /**
+ * Trigger source type for Lambda invocation.
+ */
+export type TriggerSourceType =
+  | 'eventbridge-scheduled' // EventBridge cron rule
+  | 'manual-invoke' // Manual CLI invocation
+  | 'teams-bot' // Teams Bot command (future)
+  | 'unknown'; // Fallback for unidentified sources
+
+/**
+ * Trigger source metadata.
+ */
+export interface TriggerSource {
+  /**
+   * Type of trigger source.
+   */
+  type: TriggerSourceType;
+
+  /**
+   * Identity information (ARN, username, etc.).
+   * - EventBridge: Rule ARN (e.g., "arn:aws:events:...")
+   * - Manual: IAM user/role ARN (from STS GetCallerIdentity)
+   * - Teams Bot: Teams user display name
+   */
+  identity: string;
+
+  /**
+   * Human-readable display name.
+   * - EventBridge: Rule name (e.g., "lights-out-sss-lab-start")
+   * - Manual: IAM username or role name
+   * - Teams Bot: "@username"
+   */
+  displayName: string;
+
+  /**
+   * Optional additional metadata.
+   */
+  metadata?: {
+    /**
+     * For EventBridge: detail-type (e.g., "Scheduled Event")
+     */
+    eventDetailType?: string;
+    /**
+     * For manual invoke: AWS account ID
+     */
+    accountId?: string;
+    /**
+     * For Teams Bot: Teams message ID
+     */
+    teamsMessageId?: string;
+    [key: string]: unknown;
+  };
+}
+
+/**
+ * Lambda event structure.
+ */
+export interface LambdaEvent {
+  action?: string;
+
+  /**
+   * Trigger source metadata.
+   * If not present, will be detected from Lambda context + event structure.
+   */
+  triggerSource?: TriggerSource;
+
+  /**
+   * AWS EventBridge event fields (when triggered by EventBridge).
+   */
+  source?: string; // "aws.events"
+  'detail-type'?: string; // "Scheduled Event"
+  resources?: string[]; // [Rule ARN]
+
+  [key: string]: unknown;
+}
+
+/**
  * Execution strategy for resource operations.
  *
  * - sequential: Process resources one by one in priority order (safest, slowest)
@@ -107,6 +183,10 @@ export interface HandlerResult {
   message: string;
   previousState?: Record<string, unknown>;
   error?: string;
+  /**
+   * Trigger source metadata (passed to Teams notifier).
+   */
+  triggerSource?: TriggerSource;
 }
 
 /**
