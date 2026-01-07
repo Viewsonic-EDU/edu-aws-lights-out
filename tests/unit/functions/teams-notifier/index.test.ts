@@ -41,6 +41,33 @@ describe('teams-notifier/index', () => {
   });
 
   describe('main - ECS Task State Change events', () => {
+    it('should skip notification for intermediate states', async () => {
+      const event: EventBridgeEvent<'ECS Task State Change', any> = {
+        version: '0',
+        id: 'test-event-id',
+        'detail-type': 'ECS Task State Change',
+        source: 'aws.ecs',
+        account: '123456789012',
+        time: '2026-01-05T10:30:00Z',
+        region: 'us-east-1',
+        resources: [],
+        detail: {
+          clusterArn: 'arn:aws:ecs:us-east-1:123456789012:cluster/test-cluster',
+          taskArn: 'arn:aws:ecs:us-east-1:123456789012:task/test-cluster/task123',
+          group: 'service:test-service',
+          lastStatus: 'RUNNING',
+          desiredStatus: 'STOPPED', // Intermediate state: task is running but should be stopped
+          containers: [{ name: 'app', lastStatus: 'RUNNING' }],
+        },
+      };
+
+      await main(event);
+
+      // Should not call any downstream services
+      expect(taggingMock.calls()).toHaveLength(0);
+      expect(mockedFetch).not.toHaveBeenCalled();
+    });
+
     it('should handle ECS task state change and send Teams notification', async () => {
       const event: EventBridgeEvent<'ECS Task State Change', any> = {
         version: '0',
@@ -54,6 +81,7 @@ describe('teams-notifier/index', () => {
         detail: {
           clusterArn: 'arn:aws:ecs:us-east-1:123456789012:cluster/airsync-cluster',
           taskArn: 'arn:aws:ecs:us-east-1:123456789012:task/airsync-cluster/abc123',
+          group: 'service:airsync-api-service', // Task launched by a service
           lastStatus: 'RUNNING',
           desiredStatus: 'RUNNING',
           containers: [
@@ -69,11 +97,14 @@ describe('teams-notifier/index', () => {
         },
       };
 
-      // Mock resource tags
+      const expectedServiceArn =
+        'arn:aws:ecs:us-east-1:123456789012:service/airsync-cluster/airsync-api-service';
+
+      // Mock resource tags - should query service ARN, not task ARN
       taggingMock.on(GetResourcesCommand).resolves({
         ResourceTagMappingList: [
           {
-            ResourceARN: event.detail.taskArn,
+            ResourceARN: expectedServiceArn,
             Tags: [
               { Key: 'lights-out:group', Value: 'airsync-dev' },
               { Key: 'lights-out:managed', Value: 'true' },
@@ -114,7 +145,7 @@ describe('teams-notifier/index', () => {
           project: 'airsync-dev',
           resourceType: 'ecs-task',
           resourceId: 'abc123',
-          previousState: 'RUNNING',
+          previousState: 'STOPPED', // Task started: STOPPED → RUNNING
           newState: 'RUNNING',
           additionalInfo: expect.objectContaining({
             cluster: 'airsync-cluster',
@@ -136,6 +167,171 @@ describe('teams-notifier/index', () => {
       );
     });
 
+    it('should send notification when task reaches stable STOPPED state', async () => {
+      const event: EventBridgeEvent<'ECS Task State Change', any> = {
+        version: '0',
+        id: 'test-event-id',
+        'detail-type': 'ECS Task State Change',
+        source: 'aws.ecs',
+        account: '123456789012',
+        time: '2026-01-05T10:30:00Z',
+        region: 'us-east-1',
+        resources: [],
+        detail: {
+          clusterArn: 'arn:aws:ecs:us-east-1:123456789012:cluster/test-cluster',
+          taskArn: 'arn:aws:ecs:us-east-1:123456789012:task/test-cluster/task123',
+          group: 'service:test-service',
+          lastStatus: 'STOPPED',
+          desiredStatus: 'STOPPED',
+          containers: [{ name: 'app', lastStatus: 'STOPPED' }],
+        },
+      };
+
+      const expectedServiceArn =
+        'arn:aws:ecs:us-east-1:123456789012:service/test-cluster/test-service';
+
+      taggingMock.on(GetResourcesCommand).resolves({
+        ResourceTagMappingList: [
+          {
+            ResourceARN: expectedServiceArn,
+            Tags: [{ Key: 'lights-out:project', Value: 'test-project' }],
+          },
+        ],
+      });
+
+      vi.spyOn(config, 'getProjectConfig').mockResolvedValue({
+        project: 'test-project',
+        webhook_url: 'https://outlook.office.com/webhook/test123',
+        created_at: '2026-01-01T00:00:00Z',
+        updated_at: '2026-01-05T00:00:00Z',
+      });
+
+      vi.spyOn(adaptiveCard, 'createStateChangeCard').mockReturnValue({
+        type: 'message',
+        attachments: [],
+      });
+      mockedFetch.mockResolvedValue({ ok: true } as Response);
+
+      await main(event);
+
+      // Verify notification was sent
+      expect(mockedFetch).toHaveBeenCalled();
+      expect(adaptiveCard.createStateChangeCard).toHaveBeenCalledWith(
+        expect.objectContaining({
+          previousState: 'RUNNING', // Task stopped: RUNNING → STOPPED
+          newState: 'STOPPED',
+        })
+      );
+    });
+
+    it('should query service ARN when task has group field', async () => {
+      const event: EventBridgeEvent<'ECS Task State Change', any> = {
+        version: '0',
+        id: 'test-event-id',
+        'detail-type': 'ECS Task State Change',
+        source: 'aws.ecs',
+        account: '123456789012',
+        time: '2026-01-05T10:30:00Z',
+        region: 'us-east-1',
+        resources: [],
+        detail: {
+          clusterArn: 'arn:aws:ecs:us-east-1:123456789012:cluster/my-cluster',
+          taskArn: 'arn:aws:ecs:us-east-1:123456789012:task/my-cluster/task123',
+          group: 'service:my-service',
+          lastStatus: 'RUNNING',
+          desiredStatus: 'RUNNING',
+          containers: [{ name: 'app', lastStatus: 'RUNNING' }],
+        },
+      };
+
+      const expectedServiceArn = 'arn:aws:ecs:us-east-1:123456789012:service/my-cluster/my-service';
+
+      taggingMock.on(GetResourcesCommand).resolves({
+        ResourceTagMappingList: [
+          {
+            ResourceARN: expectedServiceArn,
+            Tags: [{ Key: 'lights-out:project', Value: 'test-project' }],
+          },
+        ],
+      });
+
+      vi.spyOn(config, 'getProjectConfig').mockResolvedValue({
+        project: 'test-project',
+        webhook_url: 'https://outlook.office.com/webhook/test123',
+        created_at: '2026-01-01T00:00:00Z',
+        updated_at: '2026-01-05T00:00:00Z',
+      });
+
+      vi.spyOn(adaptiveCard, 'createStateChangeCard').mockReturnValue({
+        type: 'message',
+        attachments: [],
+      });
+      mockedFetch.mockResolvedValue({ ok: true } as Response);
+
+      await main(event);
+
+      // Verify that tagging API was called with service ARN
+      expect(taggingMock.calls()).toHaveLength(1);
+      const call = taggingMock.call(0);
+      expect(call.args[0].input.ResourceARNList).toEqual([expectedServiceArn]);
+
+      // Verify notification was sent
+      expect(mockedFetch).toHaveBeenCalled();
+    });
+
+    it('should fallback to task ARN when group field is missing', async () => {
+      const event: EventBridgeEvent<'ECS Task State Change', any> = {
+        version: '0',
+        id: 'test-event-id',
+        'detail-type': 'ECS Task State Change',
+        source: 'aws.ecs',
+        account: '123456789012',
+        time: '2026-01-05T10:30:00Z',
+        region: 'us-east-1',
+        resources: [],
+        detail: {
+          clusterArn: 'arn:aws:ecs:us-east-1:123456789012:cluster/my-cluster',
+          taskArn: 'arn:aws:ecs:us-east-1:123456789012:task/my-cluster/task123',
+          // No group field - standalone task
+          lastStatus: 'RUNNING',
+          desiredStatus: 'RUNNING',
+          containers: [{ name: 'app', lastStatus: 'RUNNING' }],
+        },
+      };
+
+      taggingMock.on(GetResourcesCommand).resolves({
+        ResourceTagMappingList: [
+          {
+            ResourceARN: event.detail.taskArn,
+            Tags: [{ Key: 'lights-out:project', Value: 'standalone-project' }],
+          },
+        ],
+      });
+
+      vi.spyOn(config, 'getProjectConfig').mockResolvedValue({
+        project: 'standalone-project',
+        webhook_url: 'https://outlook.office.com/webhook/test123',
+        created_at: '2026-01-01T00:00:00Z',
+        updated_at: '2026-01-05T00:00:00Z',
+      });
+
+      vi.spyOn(adaptiveCard, 'createStateChangeCard').mockReturnValue({
+        type: 'message',
+        attachments: [],
+      });
+      mockedFetch.mockResolvedValue({ ok: true } as Response);
+
+      await main(event);
+
+      // Verify that tagging API was called with task ARN (fallback)
+      expect(taggingMock.calls()).toHaveLength(1);
+      const call = taggingMock.call(0);
+      expect(call.args[0].input.ResourceARNList).toEqual([event.detail.taskArn]);
+
+      // Verify notification was sent
+      expect(mockedFetch).toHaveBeenCalled();
+    });
+
     it('should skip notification when resource is missing lights-out:group tag', async () => {
       const event: EventBridgeEvent<'ECS Task State Change', any> = {
         version: '0',
@@ -149,18 +345,22 @@ describe('teams-notifier/index', () => {
         detail: {
           clusterArn: 'arn:aws:ecs:us-east-1:123456789012:cluster/test-cluster',
           taskArn: 'arn:aws:ecs:us-east-1:123456789012:task/test-cluster/abc123',
+          group: 'service:test-service',
           lastStatus: 'RUNNING',
           desiredStatus: 'RUNNING',
           containers: [{ name: 'app', lastStatus: 'RUNNING' }],
         },
       };
 
-      // Mock resource tags (missing lights-out:group)
+      const expectedServiceArn =
+        'arn:aws:ecs:us-east-1:123456789012:service/test-cluster/test-service';
+
+      // Mock resource tags (missing lights-out:group/env/project)
       taggingMock.on(GetResourcesCommand).resolves({
         ResourceTagMappingList: [
           {
-            ResourceARN: event.detail.taskArn,
-            Tags: [{ Key: 'Name', Value: 'test-task' }],
+            ResourceARN: expectedServiceArn,
+            Tags: [{ Key: 'Name', Value: 'test-service' }],
           },
         ],
       });
@@ -189,17 +389,21 @@ describe('teams-notifier/index', () => {
         detail: {
           clusterArn: 'arn:aws:ecs:us-east-1:123456789012:cluster/test-cluster',
           taskArn: 'arn:aws:ecs:us-east-1:123456789012:task/test-cluster/abc123',
+          group: 'service:test-service',
           lastStatus: 'RUNNING',
           desiredStatus: 'RUNNING',
           containers: [{ name: 'app', lastStatus: 'RUNNING' }],
         },
       };
 
+      const expectedServiceArn =
+        'arn:aws:ecs:us-east-1:123456789012:service/test-cluster/test-service';
+
       // Mock resource tags with lights-out:env instead
       taggingMock.on(GetResourcesCommand).resolves({
         ResourceTagMappingList: [
           {
-            ResourceARN: event.detail.taskArn,
+            ResourceARN: expectedServiceArn,
             Tags: [{ Key: 'lights-out:env', Value: 'dev' }],
           },
         ],
@@ -241,16 +445,20 @@ describe('teams-notifier/index', () => {
         detail: {
           clusterArn: 'arn:aws:ecs:us-east-1:123456789012:cluster/test-cluster',
           taskArn: 'arn:aws:ecs:us-east-1:123456789012:task/test-cluster/abc123',
+          group: 'service:unknown-service',
           lastStatus: 'RUNNING',
           desiredStatus: 'RUNNING',
           containers: [{ name: 'app', lastStatus: 'RUNNING' }],
         },
       };
 
+      const expectedServiceArn =
+        'arn:aws:ecs:us-east-1:123456789012:service/test-cluster/unknown-service';
+
       taggingMock.on(GetResourcesCommand).resolves({
         ResourceTagMappingList: [
           {
-            ResourceARN: event.detail.taskArn,
+            ResourceARN: expectedServiceArn,
             Tags: [{ Key: 'lights-out:group', Value: 'unknown-project' }],
           },
         ],
@@ -278,16 +486,20 @@ describe('teams-notifier/index', () => {
         detail: {
           clusterArn: 'arn:aws:ecs:us-east-1:123456789012:cluster/test-cluster',
           taskArn: 'arn:aws:ecs:us-east-1:123456789012:task/test-cluster/abc123',
+          group: 'service:test-service',
           lastStatus: 'RUNNING',
           desiredStatus: 'RUNNING',
           containers: [{ name: 'app', lastStatus: 'RUNNING' }],
         },
       };
 
+      const expectedServiceArn =
+        'arn:aws:ecs:us-east-1:123456789012:service/test-cluster/test-service';
+
       taggingMock.on(GetResourcesCommand).resolves({
         ResourceTagMappingList: [
           {
-            ResourceARN: event.detail.taskArn,
+            ResourceARN: expectedServiceArn,
             Tags: [{ Key: 'lights-out:group', Value: 'test-project' }],
           },
         ],
@@ -748,16 +960,20 @@ describe('teams-notifier/index', () => {
         detail: {
           clusterArn: 'arn:aws:ecs:us-east-1:123456789012:cluster/test-cluster',
           taskArn: 'arn:aws:ecs:us-east-1:123456789012:task/test-cluster/abc123',
+          group: 'service:test-service',
           lastStatus: 'RUNNING',
           desiredStatus: 'RUNNING',
           containers: [{ name: 'app', lastStatus: 'RUNNING' }],
         },
       };
 
+      const expectedServiceArn =
+        'arn:aws:ecs:us-east-1:123456789012:service/test-cluster/test-service';
+
       taggingMock.on(GetResourcesCommand).resolves({
         ResourceTagMappingList: [
           {
-            ResourceARN: event.detail.taskArn,
+            ResourceARN: expectedServiceArn,
             Tags: [{ Key: 'lights-out:group', Value: 'test-project' }],
           },
         ],
@@ -867,16 +1083,20 @@ describe('teams-notifier/index', () => {
         detail: {
           clusterArn: 'arn:aws:ecs:us-east-1:123456789012:cluster/test-cluster',
           taskArn: 'arn:aws:ecs:us-east-1:123456789012:task/test-cluster/abc123',
+          group: 'service:my-service',
           lastStatus: 'RUNNING',
           desiredStatus: 'RUNNING',
           containers: [{ name: 'app', lastStatus: 'RUNNING' }],
         },
       };
 
+      const expectedServiceArn =
+        'arn:aws:ecs:us-east-1:123456789012:service/test-cluster/my-service';
+
       taggingMock.on(GetResourcesCommand).resolves({
         ResourceTagMappingList: [
           {
-            ResourceARN: event.detail.taskArn,
+            ResourceARN: expectedServiceArn,
             Tags: [{ Key: 'lights-out:project', Value: 'my-project' }],
           },
         ],
@@ -913,16 +1133,20 @@ describe('teams-notifier/index', () => {
         detail: {
           clusterArn: 'arn:aws:ecs:us-east-1:123456789012:cluster/test-cluster',
           taskArn: 'arn:aws:ecs:us-east-1:123456789012:task/test-cluster/abc123',
+          group: 'service:priority-test-service',
           lastStatus: 'RUNNING',
           desiredStatus: 'RUNNING',
           containers: [{ name: 'app', lastStatus: 'RUNNING' }],
         },
       };
 
+      const expectedServiceArn =
+        'arn:aws:ecs:us-east-1:123456789012:service/test-cluster/priority-test-service';
+
       taggingMock.on(GetResourcesCommand).resolves({
         ResourceTagMappingList: [
           {
-            ResourceARN: event.detail.taskArn,
+            ResourceARN: expectedServiceArn,
             Tags: [
               { Key: 'lights-out:group', Value: 'group-value' },
               { Key: 'lights-out:env', Value: 'env-value' },

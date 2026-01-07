@@ -28,6 +28,7 @@ interface ECSTaskStateChangeEvent {
   taskArn: string;
   lastStatus: string;
   desiredStatus: string;
+  group?: string; // Format: "service:<service-name>" for tasks launched by a service
   containers: Array<{
     name: string;
     lastStatus: string;
@@ -103,6 +104,24 @@ async function handleECSStateChange(
 ): Promise<void> {
   const { detail } = event;
 
+  // Only notify on stable states to avoid duplicate notifications
+  // - RUNNING: Task has fully started (lastStatus = RUNNING, desiredStatus = RUNNING)
+  // - STOPPED: Task has fully stopped
+  const isStableState =
+    (detail.lastStatus === 'RUNNING' && detail.desiredStatus === 'RUNNING') ||
+    detail.lastStatus === 'STOPPED';
+
+  if (!isStableState) {
+    logger.debug(
+      {
+        lastStatus: detail.lastStatus,
+        desiredStatus: detail.desiredStatus,
+      },
+      'Skipping notification for intermediate state'
+    );
+    return;
+  }
+
   // Extract resource information
   const taskArn = detail.taskArn;
   const resourceId = extractResourceId(taskArn);
@@ -113,17 +132,23 @@ async function handleECSStateChange(
       resourceId,
       lastStatus: detail.lastStatus,
       desiredStatus: detail.desiredStatus,
+      group: detail.group,
     },
     'Processing ECS task state change'
   );
 
   // Get resource tags (to find project)
-  const tags = await getResourceTags(taskArn);
+  // For tasks launched by a service, get tags from the service ARN instead of task ARN
+  const arnToQuery = detail.group?.startsWith('service:')
+    ? buildServiceArn(detail.clusterArn, detail.group.substring(8)) // Remove "service:" prefix
+    : taskArn;
+
+  const tags = await getResourceTags(arnToQuery);
   const project = tags['lights-out:group'] || tags['lights-out:env'] || tags['lights-out:project'];
 
   if (!project) {
     logger.warn(
-      { taskArn },
+      { taskArn, queriedArn: arnToQuery, group: detail.group },
       'Resource missing lights-out:group or lights-out:env tag or lights-out:project tag, skipping notification'
     );
     return;
@@ -140,11 +165,16 @@ async function handleECSStateChange(
   const clusterName = extractResourceId(detail.clusterArn);
   const containerNames = detail.containers.map((c) => c.name).join(', ');
 
+  // Infer previous state based on current state
+  // For ECS tasks: RUNNING means it was started (from STOPPED/PENDING)
+  //                STOPPED means it was stopped (from RUNNING)
+  const previousState = detail.lastStatus === 'RUNNING' ? 'STOPPED' : 'RUNNING';
+
   const stateChangeData = {
     project,
     resourceType: 'ecs-task',
     resourceId,
-    previousState: detail.desiredStatus,
+    previousState,
     newState: detail.lastStatus,
     timestamp: new Date().toISOString(),
     additionalInfo: {
@@ -272,6 +302,28 @@ async function getResourceTags(arn: string): Promise<Record<string, string>> {
 function extractResourceId(arn: string): string {
   const parts = arn.split('/');
   return parts[parts.length - 1];
+}
+
+/**
+ * Build ECS Service ARN from cluster ARN and service name.
+ *
+ * @param clusterArn - ECS cluster ARN
+ * @param serviceName - ECS service name
+ * @returns Service ARN
+ *
+ * @example
+ * buildServiceArn('arn:aws:ecs:us-east-1:123:cluster/my-cluster', 'my-service')
+ * => 'arn:aws:ecs:us-east-1:123:service/my-cluster/my-service'
+ */
+function buildServiceArn(clusterArn: string, serviceName: string): string {
+  // Extract cluster name from cluster ARN
+  // Format: arn:aws:ecs:region:account:cluster/cluster-name
+  const clusterName = extractResourceId(clusterArn);
+
+  // Build service ARN
+  // Format: arn:aws:ecs:region:account:service/cluster-name/service-name
+  const arnPrefix = clusterArn.split(':cluster/')[0];
+  return `${arnPrefix}:service/${clusterName}/${serviceName}`;
 }
 
 /**
