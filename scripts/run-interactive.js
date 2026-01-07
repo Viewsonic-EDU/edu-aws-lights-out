@@ -93,11 +93,7 @@ const MODES = {
       {
         title: '⚡ Lambda: Handler function         - Deploy only the Lambda `handler` function',
         value: 'lambda-function-handler',
-      },
-      {
-        title: '📢 Lambda: TeamsNotifier function   - Deploy only the Lambda `teamsNotifier` function',
-        value: 'lambda-function-teamsNotifier',
-      },
+      }
     ],
     customCommand: true,
   },

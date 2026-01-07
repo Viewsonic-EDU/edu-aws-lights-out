@@ -6,13 +6,14 @@ regions:
 notifications:
   teams:
     enabled: true
-    webhook_url: 'https://outlook.office.com/webhook/YOUR-WEBHOOK-URL-HERE'
-    description: 'SSS Lab Team Channel' # Optional: describe this webhook
+    webhook_url: >-
+      https://defaultf7a082108cd2459f9459ddb19785f3.76.environment.api.powerplatform.com:443/powerautomate/automations/direct/workflows/11f75ec7467946f7bcfb9026ab827105/triggers/manual/paths/invoke?api-version=1&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=Yw8kWNrx1C6uJ2ItXBPTUrqPX_-1ZneuQX79NAaA9nk
+    description: Power Automate Workflow for Notifications to Lights-Out Testing
 discovery:
   method: tags
   tags:
     lights-out:managed: 'true'
-    lights-out:env: sss-lab
+    lights-out:group: lights-out-testing
   resource_types:
     - ecs:service
     - rds:db
@@ -25,8 +26,8 @@ resource_defaults:
     stop:
       desiredCount: 0
   rds-db:
-    skipFinalSnapshot: true
-    waitTimeout: 600
+    waitForStable: true
+    stableTimeoutSeconds: 900
 schedules:
   default:
     timezone: Asia/Taipei

@@ -26,6 +26,9 @@ import { getResourceDefaults } from './base';
  * the StartDBInstance and StopDBInstance APIs. Unlike ECS services,
  * RDS instances are directly started/stopped rather than scaled.
  */
+
+const RDS_DEFAULT_TIMEOUT_SECONDS = 900; // 15 minutes
+
 export class RDSInstanceHandler implements ResourceHandler {
   private rdsClient: RDSClient;
   private dbInstanceIdentifier: string;
@@ -182,7 +185,7 @@ export class RDSInstanceHandler implements ResourceHandler {
       // 5. Wait for stopped if configured
       const defaults = getResourceDefaults(this.config, this.resource.resourceType);
       if (defaults.waitForStable) {
-        const timeout = (defaults.stableTimeoutSeconds as number) ?? 300;
+        const timeout = (defaults.stableTimeoutSeconds as number) ?? RDS_DEFAULT_TIMEOUT_SECONDS;
         this.logger.info(
           {
             db_instance: this.dbInstanceIdentifier,
@@ -307,7 +310,7 @@ export class RDSInstanceHandler implements ResourceHandler {
       // 5. Wait for available if configured
       const defaults = getResourceDefaults(this.config, this.resource.resourceType);
       if (defaults.waitForStable) {
-        const timeout = (defaults.stableTimeoutSeconds as number) ?? 300;
+        const timeout = (defaults.stableTimeoutSeconds as number) ?? RDS_DEFAULT_TIMEOUT_SECONDS;
         this.logger.info(
           {
             db_instance: this.dbInstanceIdentifier,
@@ -399,7 +402,7 @@ export class RDSInstanceHandler implements ResourceHandler {
    * @param timeout - Maximum wait time in seconds
    * @throws Error if instance does not become available within timeout
    */
-  private async waitForAvailable(timeout: number = 300): Promise<void> {
+  private async waitForAvailable(timeout: number = RDS_DEFAULT_TIMEOUT_SECONDS): Promise<void> {
     this.logger.debug(
       {
         db_instance: this.dbInstanceIdentifier,
@@ -436,7 +439,7 @@ export class RDSInstanceHandler implements ResourceHandler {
    * @param timeout - Maximum wait time in seconds
    * @throws Error if instance does not stop within timeout
    */
-  private async waitForStopped(timeout: number = 300): Promise<void> {
+  private async waitForStopped(timeout: number = 600): Promise<void> {
     this.logger.debug(
       {
         db_instance: this.dbInstanceIdentifier,
