@@ -235,7 +235,16 @@ export class Orchestrator {
     action: LambdaAction
   ): Promise<HandlerResult> {
     try {
-      const handler = getHandler(resource.resourceType, resource, this.config);
+      // Temporarily store trigger source in resource metadata for handler access
+      const resourceWithTriggerSource: DiscoveredResource = {
+        ...resource,
+        metadata: {
+          ...resource.metadata,
+          __triggerSource: this.triggerSource,
+        },
+      };
+
+      const handler = getHandler(resource.resourceType, resourceWithTriggerSource, this.config);
 
       if (!handler) {
         logger.warn(

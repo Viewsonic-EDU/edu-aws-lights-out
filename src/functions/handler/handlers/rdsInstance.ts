@@ -14,7 +14,13 @@ import {
 } from '@aws-sdk/client-rds';
 import { setTimeout } from 'timers/promises';
 import type { Logger } from 'pino';
-import type { DiscoveredResource, Config, HandlerResult, ResourceHandler } from '@shared/types';
+import type {
+  DiscoveredResource,
+  Config,
+  HandlerResult,
+  ResourceHandler,
+  TriggerSource,
+} from '@shared/types';
 import { setupLogger } from '@shared/utils/logger';
 import { sendTeamsNotification } from '@shared/utils/teamsNotifier';
 import { getResourceDefaults } from './base';
@@ -33,12 +39,16 @@ export class RDSInstanceHandler implements ResourceHandler {
   private rdsClient: RDSClient;
   private dbInstanceIdentifier: string;
   private logger: Logger;
+  private triggerSource?: TriggerSource;
 
   constructor(
     private resource: DiscoveredResource,
     private config: Config
   ) {
     this.logger = setupLogger(`lights-out:handler.${resource.resourceType}`);
+
+    // Extract trigger source from resource metadata (injected by Orchestrator)
+    this.triggerSource = resource.metadata.__triggerSource as TriggerSource | undefined;
 
     // Extract region from ARN (format: arn:aws:rds:REGION:account:db:instance-id)
     // Falls back to AWS_DEFAULT_REGION environment variable if not in ARN
@@ -203,6 +213,7 @@ export class RDSInstanceHandler implements ResourceHandler {
         resourceId: this.resource.resourceId,
         message: `DB instance stopped (was ${String(currentStatus.status)})`,
         previousState: currentStatus,
+        triggerSource: this.triggerSource,
       };
 
       // Send Teams notification if configured
@@ -224,6 +235,7 @@ export class RDSInstanceHandler implements ResourceHandler {
         resourceId: this.resource.resourceId,
         message: 'Stop operation failed',
         error: error instanceof Error ? error.message : String(error),
+        triggerSource: this.triggerSource,
       };
 
       // Send Teams notification for failure
@@ -328,6 +340,7 @@ export class RDSInstanceHandler implements ResourceHandler {
         resourceId: this.resource.resourceId,
         message: `DB instance started (was ${String(currentStatus.status)})`,
         previousState: currentStatus,
+        triggerSource: this.triggerSource,
       };
 
       // Send Teams notification if configured
@@ -349,6 +362,7 @@ export class RDSInstanceHandler implements ResourceHandler {
         resourceId: this.resource.resourceId,
         message: 'Start operation failed',
         error: error instanceof Error ? error.message : String(error),
+        triggerSource: this.triggerSource,
       };
 
       // Send Teams notification for failure

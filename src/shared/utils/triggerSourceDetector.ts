@@ -4,7 +4,11 @@
  * Detects and enriches trigger source information from Lambda events.
  */
 
-import { STSClient, GetCallerIdentityCommand } from '@aws-sdk/client-sts';
+import {
+  STSClient,
+  GetCallerIdentityCommand,
+  type GetCallerIdentityCommandOutput,
+} from '@aws-sdk/client-sts';
 import type { Context } from 'aws-lambda';
 import type { LambdaEvent, TriggerSource } from '@shared/types';
 import { setupLogger } from './logger';
@@ -35,7 +39,12 @@ export async function detectTriggerSource(
   }
 
   // 2. Check if triggered by EventBridge
-  if (event.source === 'aws.events' && event['detail-type'] === 'Scheduled Event') {
+  const detailType = event['detail-type'];
+  if (
+    event.source === 'aws.events' &&
+    typeof detailType === 'string' &&
+    detailType === 'Scheduled Event'
+  ) {
     return detectEventBridgeSource(event);
   }
 
@@ -56,15 +65,16 @@ export async function detectTriggerSource(
  */
 function detectEventBridgeSource(event: LambdaEvent): TriggerSource {
   const ruleArn = event.resources?.[0];
+  const detailType = event['detail-type'];
 
-  if (!ruleArn) {
+  if (!ruleArn || typeof ruleArn !== 'string') {
     logger.warn('EventBridge event missing rule ARN in resources');
     return {
       type: 'eventbridge-scheduled',
       identity: 'unknown',
       displayName: 'EventBridge (Unknown Rule)',
       metadata: {
-        eventDetailType: event['detail-type'],
+        eventDetailType: typeof detailType === 'string' ? detailType : undefined,
       },
     };
   }
@@ -80,7 +90,7 @@ function detectEventBridgeSource(event: LambdaEvent): TriggerSource {
     identity: ruleArn,
     displayName: ruleName,
     metadata: {
-      eventDetailType: event['detail-type'],
+      eventDetailType: typeof detailType === 'string' ? detailType : undefined,
     },
   };
 }
@@ -93,15 +103,17 @@ async function detectManualInvokeSource(context: Context): Promise<TriggerSource
   // Format: arn:aws:lambda:region:account:function:name
   const region = extractRegionFromArn(context.invokedFunctionArn);
 
-  const stsClient = new STSClient({ region });
+  const stsClient = new STSClient({ region: region || undefined });
 
   logger.debug('Calling STS GetCallerIdentity to detect manual invoke source');
 
-  const response = await stsClient.send(new GetCallerIdentityCommand({}));
+  const response: GetCallerIdentityCommandOutput = await stsClient.send(
+    new GetCallerIdentityCommand({})
+  );
 
-  const callerArn = response.Arn || 'unknown';
-  const accountId = response.Account || 'unknown';
-  const userId = response.UserId || 'unknown';
+  const callerArn = response.Arn ?? 'unknown';
+  const accountId = response.Account ?? 'unknown';
+  const userId = response.UserId ?? 'unknown';
 
   // Extract identity name from ARN
   // IAM User: arn:aws:iam::account:user/username
