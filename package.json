@@ -18,7 +18,8 @@
     "action": "node scripts/run-interactive.js --mode action",
     "config": "node scripts/run-interactive.js --mode config",
     "deploy": "node scripts/run-interactive.js --mode deploy",
-    "teams": "node scripts/run-interactive.js --mode teams"
+    "teams": "node scripts/run-interactive.js --mode teams",
+    "prepare": "husky"
   },
   "keywords": [
     "aws",
