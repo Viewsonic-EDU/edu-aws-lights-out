@@ -104,7 +104,7 @@ function createScheduleEvent({
 }
 
 /**
- * Generate events for regional schedules (group_schedules mode).
+ * Generate events for regional schedules (group_schedules_cron mode).
  *
  * @param {object} config - Parsed config object
  * @param {string} service - Service name
@@ -113,9 +113,9 @@ function createScheduleEvent({
  */
 function generateRegionalScheduleEvents(config, service, stage) {
   const events = [];
-  const groupSchedules = config.group_schedules;
+  const groupSchedulesCron = config.group_schedules_cron;
 
-  for (const [groupName, schedule] of Object.entries(groupSchedules)) {
+  for (const [groupName, schedule] of Object.entries(groupSchedulesCron)) {
     // Start event
     if (schedule.start) {
       events.push(
@@ -220,10 +220,11 @@ module.exports.events = (serverless) => {
   let stage;
   let service = 'lights-out';
 
-  if (serverless && serverless.service) {
+  console.log('[generate-schedules] 🚀 ~ serverless:', serverless);
+
+  if (serverless && serverless.options) {
     // Called by Serverless Framework
-    stage = serverless.service.provider.stage;
-    service = serverless.service.service || service;
+    stage = serverless.options.stage;
   } else {
     // Called directly (e.g., for testing) - use environment variable
     stage = process.env.SLS_STAGE || 'dev';
@@ -240,9 +241,11 @@ module.exports.events = (serverless) => {
     const config = readConfig(configPath);
 
     // Determine which mode to use
-    if (config.group_schedules && Object.keys(config.group_schedules).length > 0) {
-      console.log(`[generate-schedules] Using regional schedules (group_schedules mode)`);
-      console.log(`[generate-schedules] Groups: ${Object.keys(config.group_schedules).join(', ')}`);
+    if (config.group_schedules_cron && Object.keys(config.group_schedules_cron).length > 0) {
+      console.log(`[generate-schedules] Using regional schedules (group_schedules_cron mode)`);
+      console.log(
+        `[generate-schedules] Groups: ${Object.keys(config.group_schedules_cron).join(', ')}`
+      );
       return generateRegionalScheduleEvents(config, service, stage);
     } else {
       console.log(`[generate-schedules] Using legacy schedules (schedules_cron mode)`);
