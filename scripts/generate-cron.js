@@ -5,12 +5,13 @@
 /**
  * Generate AWS EventBridge cron expressions from human-readable schedule configurations
  *
+ * Supports two configuration modes:
+ * 1. Legacy mode (schedules.default) - Single schedule for all regions
+ * 2. Regional mode (group_schedules) - Per-group schedules with different timezones
+ *
  * Usage:
  *   node scripts/generate-cron.js --config config/sss-lab.yml
- *
- * This script reads the `schedules.default` section from a YAML config file,
- * converts timezone-aware times to UTC, generates AWS EventBridge cron expressions,
- * and updates the `schedules_cron` section in the same file.
+ *   node scripts/generate-cron.js --config config/pg-stage/airsync-stage.yml
  */
 
 const fs = require('fs');
@@ -59,45 +60,41 @@ function validateParams(params) {
 }
 
 /**
- * Validate schedule configuration
+ * Validate a single schedule entry (shared by both modes)
  */
-function validateScheduleConfig(schedules) {
-  if (!schedules || !schedules.default) {
-    throw new Error('Missing schedules.default section in config');
-  }
-
-  const { timezone, startTime, stopTime, activeDays } = schedules.default;
+function validateScheduleEntry(schedule, context) {
+  const { timezone, startTime, stopTime, activeDays } = schedule;
 
   if (!timezone) {
-    throw new Error('Missing schedules.default.timezone');
+    throw new Error(`Missing ${context}.timezone`);
   }
 
   if (!startTime) {
-    throw new Error('Missing schedules.default.startTime');
+    throw new Error(`Missing ${context}.startTime`);
   }
 
   if (!stopTime) {
-    throw new Error('Missing schedules.default.stopTime');
+    throw new Error(`Missing ${context}.stopTime`);
   }
 
   if (!activeDays || !Array.isArray(activeDays) || activeDays.length === 0) {
-    throw new Error('Missing or empty schedules.default.activeDays array');
+    throw new Error(`Missing or empty ${context}.activeDays array`);
   }
 
   // Validate time format (HH:mm)
   const timeRegex = /^([0-1][0-9]|2[0-3]):[0-5][0-9]$/;
   if (!timeRegex.test(startTime)) {
-    throw new Error(`Invalid startTime format: ${startTime}. Expected HH:mm (24-hour format)`);
+    throw new Error(`Invalid startTime format in ${context}: ${startTime}. Expected HH:mm (24-hour format)`);
   }
 
   if (!timeRegex.test(stopTime)) {
-    throw new Error(`Invalid stopTime format: ${stopTime}. Expected HH:mm (24-hour format)`);
+    throw new Error(`Invalid stopTime format in ${context}: ${stopTime}. Expected HH:mm (24-hour format)`);
   }
 
   // Validate activeDays
   for (const day of activeDays) {
     if (!DAY_MAP[day]) {
-      throw new Error(`Invalid day in activeDays: ${day}. Valid values: ${Object.keys(DAY_MAP).join(', ')}`);
+      throw new Error(`Invalid day in ${context}.activeDays: ${day}. Valid values: ${Object.keys(DAY_MAP).join(', ')}`);
     }
   }
 
@@ -105,7 +102,36 @@ function validateScheduleConfig(schedules) {
   try {
     new Intl.DateTimeFormat('en-US', { timeZone: timezone });
   } catch (error) {
-    throw new Error(`Invalid timezone: ${timezone}. Must be a valid IANA timezone (e.g., Asia/Taipei)`);
+    throw new Error(`Invalid timezone in ${context}: ${timezone}. Must be a valid IANA timezone (e.g., Asia/Taipei)`);
+  }
+}
+
+/**
+ * Validate legacy schedule configuration (schedules.default)
+ */
+function validateLegacyScheduleConfig(schedules) {
+  if (!schedules || !schedules.default) {
+    throw new Error('Missing schedules.default section in config');
+  }
+
+  validateScheduleEntry(schedules.default, 'schedules.default');
+}
+
+/**
+ * Validate regional schedule configuration (group_schedules)
+ */
+function validateGroupScheduleConfig(groupSchedules) {
+  if (!groupSchedules || typeof groupSchedules !== 'object') {
+    throw new Error('Missing or invalid group_schedules section in config');
+  }
+
+  const groups = Object.keys(groupSchedules);
+  if (groups.length === 0) {
+    throw new Error('group_schedules must contain at least one group');
+  }
+
+  for (const groupName of groups) {
+    validateScheduleEntry(groupSchedules[groupName], `group_schedules.${groupName}`);
   }
 }
 
@@ -119,63 +145,7 @@ function validateScheduleConfig(schedules) {
 function convertToUTC(localTime, timezone) {
   const [localHour, localMinute] = localTime.split(':').map(Number);
 
-  // Create a date object representing the local time in the target timezone
-  // Use a fixed date (2025-01-15 - a Wednesday) to ensure consistent results
-  const referenceDate = new Date('2025-01-15T00:00:00Z');
-  const year = referenceDate.getUTCFullYear();
-  const month = referenceDate.getUTCMonth();
-  const day = referenceDate.getUTCDate();
-
-  // Create date string in local timezone
-  const localDateString = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}T${String(localHour).padStart(2, '0')}:${String(localMinute).padStart(2, '0')}:00`;
-
-  // Get UTC offset for this timezone
-  const formatter = new Intl.DateTimeFormat('en-US', {
-    timeZone: timezone,
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit',
-    hour12: false,
-  });
-
-  // Parse the local time in the target timezone to get the equivalent UTC time
-  // Strategy: Create a date at the local time, then extract UTC components
-  const localDate = new Date(localDateString);
-
-  // Get the offset in minutes
-  const offsetMinutes = -localDate.getTimezoneOffset(); // Note: getTimezoneOffset returns offset in minutes, negative for UTC+
-
-  // For a more robust approach, use a known reference
-  // Create a date in UTC that represents the same local time
-  const utcDate = new Date(Date.UTC(year, month, day, localHour, localMinute, 0));
-
-  // Get the timezone offset using Intl
-  const parts = formatter.formatToParts(utcDate);
-  const tzHour = parseInt(parts.find(p => p.type === 'hour').value);
-  const tzMinute = parseInt(parts.find(p => p.type === 'minute').value);
-
-  // Calculate actual UTC time
-  // If timezone is UTC+8 (like Asia/Taipei), local 09:00 = UTC 01:00
-  // Strategy: Use a helper to get the offset
-
-  // Better approach: Use a known UTC timestamp and format it in the target timezone
-  const testDate = new Date('2025-01-15T00:00:00Z');
-  const testFormatter = new Intl.DateTimeFormat('en-US', {
-    timeZone: timezone,
-    hour: '2-digit',
-    minute: '2-digit',
-    hour12: false,
-  });
-
-  // Get offset by comparing UTC midnight with local time
-  const utcMidnight = new Date(Date.UTC(2025, 0, 15, 0, 0, 0));
-  const localMidnight = new Date(testFormatter.format(utcMidnight));
-
-  // Simplified approach: Calculate offset manually
-  // For Asia/Taipei (UTC+8): local 09:00 = 09:00 - 8:00 = 01:00 UTC
+  // Get timezone offset in hours
   const getTimezoneOffsetHours = (tz) => {
     const date = new Date('2025-01-15T12:00:00Z');
     const utcDate = new Date(date.toLocaleString('en-US', { timeZone: 'UTC' }));
@@ -260,10 +230,10 @@ function generateCronExpression(utcHour, utcMinute, activeDays) {
 }
 
 /**
- * Generate cron configuration object
+ * Generate cron configuration for a single schedule entry
  */
-function generateCronConfig(schedules) {
-  const { timezone, startTime, stopTime, activeDays, enabled } = schedules.default;
+function generateCronForSchedule(schedule, groupName = null) {
+  const { timezone, startTime, stopTime, activeDays, enabled } = schedule;
 
   // Convert times to UTC
   const startUTC = convertToUTC(startTime, timezone);
@@ -273,18 +243,40 @@ function generateCronConfig(schedules) {
   const startCron = generateCronExpression(startUTC.hour, startUTC.minute, activeDays);
   const stopCron = generateCronExpression(stopUTC.hour, stopUTC.minute, activeDays);
 
+  const groupLabel = groupName ? `${groupName} ` : '';
+
   return {
     start: {
       expression: startCron,
-      description: `Start resources at ${startTime} ${timezone} (${String(startUTC.hour).padStart(2, '0')}:${String(startUTC.minute).padStart(2, '0')} UTC)`,
+      description: `Start ${groupLabel}resources at ${startTime} ${timezone} (${String(startUTC.hour).padStart(2, '0')}:${String(startUTC.minute).padStart(2, '0')} UTC)`,
       enabled,
     },
     stop: {
       expression: stopCron,
-      description: `Stop resources at ${stopTime} ${timezone} (${String(stopUTC.hour).padStart(2, '0')}:${String(stopUTC.minute).padStart(2, '0')} UTC)`,
+      description: `Stop ${groupLabel}resources at ${stopTime} ${timezone} (${String(stopUTC.hour).padStart(2, '0')}:${String(stopUTC.minute).padStart(2, '0')} UTC)`,
       enabled,
     },
   };
+}
+
+/**
+ * Generate cron configuration for legacy mode (schedules.default)
+ */
+function generateLegacyCronConfig(schedules) {
+  return generateCronForSchedule(schedules.default);
+}
+
+/**
+ * Generate cron configuration for regional mode (group_schedules)
+ */
+function generateGroupCronConfig(groupSchedules) {
+  const result = {};
+
+  for (const [groupName, schedule] of Object.entries(groupSchedules)) {
+    result[groupName] = generateCronForSchedule(schedule, groupName);
+  }
+
+  return result;
 }
 
 /**
@@ -302,14 +294,18 @@ function readConfigYAML(filePath) {
 /**
  * Update YAML configuration file with generated cron config
  */
-function updateConfigYAML(filePath, cronConfig) {
+function updateConfigYAML(filePath, cronConfig, mode) {
   try {
     // Read existing YAML
     const content = fs.readFileSync(filePath, 'utf8');
     const config = yaml.load(content);
 
-    // Update schedules_cron section
-    config.schedules_cron = cronConfig;
+    // Update the appropriate cron section based on mode
+    if (mode === 'regional') {
+      config.group_schedules_cron = cronConfig;
+    } else {
+      config.schedules_cron = cronConfig;
+    }
 
     // Convert back to YAML with proper formatting
     const updatedContent = yaml.dump(config, {
@@ -326,6 +322,19 @@ function updateConfigYAML(filePath, cronConfig) {
   } catch (error) {
     throw new Error(`Failed to update config file ${filePath}: ${error.message}`);
   }
+}
+
+/**
+ * Detect configuration mode (legacy or regional)
+ */
+function detectConfigMode(config) {
+  if (config.group_schedules && Object.keys(config.group_schedules).length > 0) {
+    return 'regional';
+  }
+  if (config.schedules && config.schedules.default) {
+    return 'legacy';
+  }
+  return null;
 }
 
 /**
@@ -349,28 +358,70 @@ async function main() {
     // Read and parse YAML
     const config = readConfigYAML(configPath);
 
-    // Validate schedule configuration
-    validateScheduleConfig(config.schedules);
+    // Detect configuration mode
+    const mode = detectConfigMode(config);
 
-    const { timezone, startTime, stopTime, activeDays } = config.schedules.default;
+    if (!mode) {
+      throw new Error('Config must contain either schedules.default (legacy) or group_schedules (regional)');
+    }
 
-    console.log(`\n📅 Schedule Configuration:`);
-    console.log(`   Timezone: ${timezone}`);
-    console.log(`   Start: ${startTime}`);
-    console.log(`   Stop: ${stopTime}`);
-    console.log(`   Days: ${activeDays.join(', ')}`);
+    console.log(`📋 Detected mode: ${mode === 'regional' ? 'Regional (group_schedules)' : 'Legacy (schedules.default)'}`);
 
-    // Generate cron expressions
-    const cronConfig = generateCronConfig(config.schedules);
+    if (mode === 'regional') {
+      // Regional mode: group_schedules
+      validateGroupScheduleConfig(config.group_schedules);
 
-    console.log(`\n🔄 Generated Cron Expressions:`);
-    console.log(`   Start: ${cronConfig.start.expression}`);
-    console.log(`   └─ ${cronConfig.start.description}`);
-    console.log(`   Stop:  ${cronConfig.stop.expression}`);
-    console.log(`   └─ ${cronConfig.stop.description}`);
+      const groups = Object.keys(config.group_schedules);
+      console.log(`\n📅 Group Schedules (${groups.length} groups):`);
 
-    // Update YAML file
-    updateConfigYAML(configPath, cronConfig);
+      for (const groupName of groups) {
+        const schedule = config.group_schedules[groupName];
+        console.log(`\n   [${groupName}]`);
+        console.log(`   Timezone: ${schedule.timezone}`);
+        console.log(`   Start: ${schedule.startTime}`);
+        console.log(`   Stop: ${schedule.stopTime}`);
+        console.log(`   Days: ${schedule.activeDays.join(', ')}`);
+        console.log(`   Enabled: ${schedule.enabled}`);
+      }
+
+      // Generate cron expressions for all groups
+      const cronConfig = generateGroupCronConfig(config.group_schedules);
+
+      console.log(`\n🔄 Generated Cron Expressions:`);
+      for (const [groupName, cron] of Object.entries(cronConfig)) {
+        console.log(`\n   [${groupName}]`);
+        console.log(`   Start: ${cron.start.expression}`);
+        console.log(`   └─ ${cron.start.description}`);
+        console.log(`   Stop:  ${cron.stop.expression}`);
+        console.log(`   └─ ${cron.stop.description}`);
+      }
+
+      // Update YAML file
+      updateConfigYAML(configPath, cronConfig, 'regional');
+    } else {
+      // Legacy mode: schedules.default
+      validateLegacyScheduleConfig(config.schedules);
+
+      const { timezone, startTime, stopTime, activeDays } = config.schedules.default;
+
+      console.log(`\n📅 Schedule Configuration:`);
+      console.log(`   Timezone: ${timezone}`);
+      console.log(`   Start: ${startTime}`);
+      console.log(`   Stop: ${stopTime}`);
+      console.log(`   Days: ${activeDays.join(', ')}`);
+
+      // Generate cron expressions
+      const cronConfig = generateLegacyCronConfig(config.schedules);
+
+      console.log(`\n🔄 Generated Cron Expressions:`);
+      console.log(`   Start: ${cronConfig.start.expression}`);
+      console.log(`   └─ ${cronConfig.start.description}`);
+      console.log(`   Stop:  ${cronConfig.stop.expression}`);
+      console.log(`   └─ ${cronConfig.stop.description}`);
+
+      // Update YAML file
+      updateConfigYAML(configPath, cronConfig, 'legacy');
+    }
 
     console.log(`\n✨ Done!`);
   } catch (error) {

@@ -24,10 +24,49 @@ const logger = setupLogger('lights-out:orchestrator');
 export class Orchestrator {
   private readonly config: Config;
   private readonly triggerSource?: TriggerSource;
+  private readonly targetGroup?: string;
 
-  constructor(config: Config, triggerSource?: TriggerSource) {
+  constructor(config: Config, triggerSource?: TriggerSource, targetGroup?: string) {
     this.config = config;
     this.triggerSource = triggerSource;
+    this.targetGroup = targetGroup;
+  }
+
+  /**
+   * Get the target regions to scan based on targetGroup.
+   *
+   * If targetGroup is specified and region_groups is configured,
+   * returns only the regions in that group.
+   * Otherwise, falls back to the legacy regions field.
+   *
+   * @returns Array of AWS region codes to scan
+   */
+  private getTargetRegions(): string[] {
+    // If targetGroup is specified, try to find it in region_groups
+    if (this.targetGroup && this.config.region_groups) {
+      const groupRegions = this.config.region_groups[this.targetGroup];
+      if (groupRegions && groupRegions.length > 0) {
+        logger.info(
+          {
+            targetGroup: this.targetGroup,
+            regions: groupRegions,
+          },
+          'Using region group for discovery'
+        );
+        return groupRegions;
+      }
+      // If targetGroup specified but not found in region_groups, warn and fall back
+      logger.warn(
+        {
+          targetGroup: this.targetGroup,
+          availableGroups: Object.keys(this.config.region_groups),
+        },
+        'Target group not found in region_groups, falling back to legacy regions'
+      );
+    }
+
+    // Fallback to legacy regions field
+    return this.config.regions ?? [];
   }
 
   /**
@@ -41,7 +80,9 @@ export class Orchestrator {
     // Extract tag filters and resource types from config
     const tagFilters = (discoveryConfig.tags as Record<string, string>) ?? {};
     const resourceTypes = (discoveryConfig.resource_types as string[]) ?? [];
-    const regions = this.config.regions ?? [];
+
+    // Use getTargetRegions() to support regional scheduling
+    const regions = this.getTargetRegions();
 
     if (Object.keys(tagFilters).length === 0) {
       logger.warn('No tag filters configured for discovery');
@@ -58,6 +99,7 @@ export class Orchestrator {
         tagFilters,
         resourceTypes,
         regions: regions.length > 0 ? regions : ['default (Lambda region)'],
+        targetGroup: this.targetGroup ?? 'all',
       },
       'Starting tag-based resource discovery'
     );

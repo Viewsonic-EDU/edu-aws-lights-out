@@ -1,0 +1,75 @@
+version: '1.0'
+environment: pg-stage-airsync-stage
+region_groups:
+  asia:
+    - ap-southeast-1
+    - ap-northeast-1
+  america:
+    - us-east-1
+group_schedules:
+  asia:
+    timezone: Asia/Taipei
+    startTime: '08:00'
+    stopTime: '22:00'
+    activeDays:
+      - MON
+      - TUE
+      - WED
+      - THU
+      - FRI
+    enabled: true
+  america:
+    timezone: America/New_York
+    startTime: '08:00'
+    stopTime: '18:00'
+    activeDays:
+      - MON
+      - TUE
+      - WED
+      - THU
+      - FRI
+    enabled: true
+notifications:
+  teams:
+    enabled: true
+    webhook_url: >-
+      https://defaultf7a082108cd2459f9459ddb19785f3.76.environment.api.powerplatform.com:443/powerautomate/automations/direct/workflows/11f75ec7467946f7bcfb9026ab827105/triggers/manual/paths/invoke?api-version=1&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=Yw8kWNrx1C6uJ2ItXBPTUrqPX_-1ZneuQX79NAaA9nk
+    description: Power Automate Workflow for AirSync Stage Environment
+discovery:
+  method: tags
+  tags:
+    lights-out:managed: 'true'
+    lights-out:project: airsync-stage
+  resource_types:
+    - ecs:service
+resource_defaults:
+  ecs-service:
+    waitForStable: true
+    stableTimeoutSeconds: 300
+    start:
+      minCapacity: 2
+      maxCapacity: 6
+      desiredCount: 2
+    stop:
+      minCapacity: 1
+      maxCapacity: 2
+      desiredCount: 1
+group_schedules_cron:
+  asia:
+    start:
+      expression: 0 0 ? * MON-FRI *
+      description: Start asia resources at 08:00 Asia/Taipei (00:00 UTC)
+      enabled: true
+    stop:
+      expression: 0 14 ? * MON-FRI *
+      description: Stop asia resources at 22:00 Asia/Taipei (14:00 UTC)
+      enabled: true
+  america:
+    start:
+      expression: 0 13 ? * MON-FRI *
+      description: Start america resources at 08:00 America/New_York (13:00 UTC)
+      enabled: true
+    stop:
+      expression: 0 23 ? * MON-FRI *
+      description: Stop america resources at 18:00 America/New_York (23:00 UTC)
+      enabled: true
