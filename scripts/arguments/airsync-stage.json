@@ -1,0 +1,12 @@
+{
+  "scope": "project",
+  "region": "us-east-1",
+  "stage": "pg-stage-airsync-stage",
+  "profile": "pg-stage",
+  "function-name": "lights-out-pg-stage-airsync-stage",
+  "config": {
+    "name": "/lights-out/pg-stage-airsync-stage/config",
+    "path": "config/pg-stage/airsync-stage.yml",
+    "description": "Lights Out configuration for airsync-stage project"
+  }
+}
