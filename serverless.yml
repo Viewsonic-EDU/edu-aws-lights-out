@@ -60,36 +60,9 @@ functions:
     tags:
       project: lights-out
       managed-by: serverless
-    events:
-      # Dynamic schedules loaded from config file
-      - schedule:
-          name: ${self:service}-${self:provider.stage}-start
-          description: ${file(config/${self:custom.configPath}):schedules_cron.start.description}
-          rate: cron(${file(config/${self:custom.configPath}):schedules_cron.start.expression})
-          input:
-            action: start
-            triggerSource:
-              type: eventbridge-scheduled
-              identity:
-                Fn::Sub: 'arn:aws:events:${AWS::Region}:${AWS::AccountId}:rule/${self:service}-${self:provider.stage}-start'
-              displayName: ${self:service}-${self:provider.stage}-start
-              metadata:
-                eventDetailType: Scheduled Event
-          enabled: ${file(config/${self:custom.configPath}):schedules_cron.start.enabled}
-      - schedule:
-          name: ${self:service}-${self:provider.stage}-stop
-          description: ${file(config/${self:custom.configPath}):schedules_cron.stop.description}
-          rate: cron(${file(config/${self:custom.configPath}):schedules_cron.stop.expression})
-          input:
-            action: stop
-            triggerSource:
-              type: eventbridge-scheduled
-              identity:
-                Fn::Sub: 'arn:aws:events:${AWS::Region}:${AWS::AccountId}:rule/${self:service}-${self:provider.stage}-stop'
-              displayName: ${self:service}-${self:provider.stage}-stop
-              metadata:
-                eventDetailType: Scheduled Event
-          enabled: ${file(config/${self:custom.configPath}):schedules_cron.stop.enabled}
+    # Dynamic schedules generated from config file
+    # Supports both legacy (schedules_cron) and regional (group_schedules) modes
+    events: ${file(./scripts/generate-schedules.js):events}
 
 custom:
   esbuild:
@@ -104,6 +77,7 @@ custom:
   configPath: ${self:custom.resolveConfigPath.${self:provider.stage}, '${self:provider.stage}.yml'}
   resolveConfigPath:
     pg-development-airsync-dev: pg-development/airsync-dev.yml
+    pg-stage-airsync-stage: pg-stage/airsync-stage.yml
     sss-lab: sss-lab.yml
 
 plugins:

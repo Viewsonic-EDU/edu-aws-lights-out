@@ -70,6 +70,13 @@ export interface LambdaEvent {
   action?: string;
 
   /**
+   * Target region group for regional schedules.
+   * When specified, only resources in the corresponding region_groups will be processed.
+   * If not present, all regions will be processed (backward compatible).
+   */
+  targetGroup?: string;
+
+  /**
    * Trigger source metadata.
    * If not present, will be detected from Lambda context + event structure.
    */
@@ -301,6 +308,74 @@ export interface RDSResourceDefaults {
 }
 
 /**
+ * Schedule action configuration for start or stop operations.
+ * Used in group_schedules for regional scheduling.
+ */
+export interface ScheduleActionConfig {
+  /**
+   * Cron expression in AWS EventBridge format.
+   * Example: '0 13 ? * MON-FRI *' (08:00 EST in UTC)
+   */
+  expression: string;
+
+  /**
+   * Human-readable description of the schedule.
+   */
+  description?: string;
+
+  /**
+   * Whether this schedule is enabled.
+   */
+  enabled: boolean;
+}
+
+/**
+ * Group schedule configuration for a region group.
+ * Defines start and stop schedules for resources in a specific region group.
+ */
+export interface GroupScheduleConfig {
+  /**
+   * Timezone for display purposes (actual cron is always in UTC).
+   * Example: 'Asia/Taipei', 'America/New_York'
+   */
+  timezone?: string;
+
+  /**
+   * Start schedule configuration.
+   */
+  start: ScheduleActionConfig;
+
+  /**
+   * Stop schedule configuration.
+   */
+  stop: ScheduleActionConfig;
+}
+
+/**
+ * Region groups mapping.
+ * Maps group names to arrays of AWS region codes.
+ *
+ * @example
+ * {
+ *   asia: ['ap-southeast-1', 'ap-northeast-1'],
+ *   america: ['us-east-1']
+ * }
+ */
+export type RegionGroups = Record<string, string[]>;
+
+/**
+ * Group schedules mapping.
+ * Maps group names to their schedule configurations.
+ *
+ * @example
+ * {
+ *   asia: { timezone: 'Asia/Taipei', start: {...}, stop: {...} },
+ *   america: { timezone: 'America/New_York', start: {...}, stop: {...} }
+ * }
+ */
+export type GroupSchedules = Record<string, GroupScheduleConfig>;
+
+/**
  * Configuration from SSM Parameter Store.
  */
 /**
@@ -323,7 +398,22 @@ export interface NotificationConfig {
 export interface Config {
   version: string;
   environment: string;
-  regions?: string[]; // Optional list of AWS regions to scan
+  regions?: string[]; // Optional list of AWS regions to scan (legacy, for backward compatibility)
+
+  /**
+   * Region groups for regional scheduling.
+   * Maps group names (e.g., 'asia', 'america') to arrays of AWS region codes.
+   * When present, used in conjunction with group_schedules for per-group scheduling.
+   */
+  region_groups?: RegionGroups;
+
+  /**
+   * Group schedules for regional scheduling.
+   * Defines per-group start/stop schedules with timezone information.
+   * When present, EventBridge rules are generated per group instead of globally.
+   */
+  group_schedules?: GroupSchedules;
+
   discovery: {
     method: string;
     tags?: Record<string, string>;

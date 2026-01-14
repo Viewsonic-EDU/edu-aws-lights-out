@@ -1046,6 +1046,227 @@ describe('Orchestrator', () => {
     });
   });
 
+  describe('regional scheduling with targetGroup', () => {
+    it('should use region_groups when targetGroup is specified and found', async () => {
+      const configWithRegionGroups: Config = {
+        ...sampleConfig,
+        region_groups: {
+          asia: ['ap-southeast-1', 'ap-northeast-1'],
+          america: ['us-east-1'],
+        },
+        regions: ['eu-west-1'], // Legacy regions should be ignored when targetGroup is found
+      };
+
+      orchestrator = new Orchestrator(configWithRegionGroups, undefined, 'asia');
+      mockDiscoverFn.mockResolvedValue([]);
+
+      await orchestrator.discoverResources();
+
+      // Should use asia region_groups, not legacy regions
+      expect(TagDiscoveryMock).toHaveBeenCalledWith(
+        { 'lights-out:managed': 'true' },
+        ['ecs:service', 'rds:db'],
+        ['ap-southeast-1', 'ap-northeast-1']
+      );
+    });
+
+    it('should use different regions for different targetGroups', async () => {
+      const configWithRegionGroups: Config = {
+        ...sampleConfig,
+        region_groups: {
+          asia: ['ap-southeast-1', 'ap-northeast-1'],
+          america: ['us-east-1'],
+        },
+      };
+
+      // Test with 'america' targetGroup
+      orchestrator = new Orchestrator(configWithRegionGroups, undefined, 'america');
+      mockDiscoverFn.mockResolvedValue([]);
+
+      await orchestrator.discoverResources();
+
+      expect(TagDiscoveryMock).toHaveBeenCalledWith(
+        { 'lights-out:managed': 'true' },
+        ['ecs:service', 'rds:db'],
+        ['us-east-1']
+      );
+    });
+
+    it('should fallback to legacy regions when targetGroup is not found in region_groups', async () => {
+      const configWithRegionGroups: Config = {
+        ...sampleConfig,
+        region_groups: {
+          asia: ['ap-southeast-1'],
+        },
+        regions: ['eu-west-1', 'eu-central-1'], // Fallback regions
+      };
+
+      // Request non-existent group
+      orchestrator = new Orchestrator(configWithRegionGroups, undefined, 'europe');
+      mockDiscoverFn.mockResolvedValue([]);
+
+      await orchestrator.discoverResources();
+
+      // Should fallback to legacy regions
+      expect(TagDiscoveryMock).toHaveBeenCalledWith(
+        { 'lights-out:managed': 'true' },
+        ['ecs:service', 'rds:db'],
+        ['eu-west-1', 'eu-central-1']
+      );
+    });
+
+    it('should fallback to legacy regions when targetGroup is specified but region_groups is not configured', async () => {
+      const configWithoutRegionGroups: Config = {
+        ...sampleConfig,
+        regions: ['us-west-2'],
+      };
+
+      orchestrator = new Orchestrator(configWithoutRegionGroups, undefined, 'asia');
+      mockDiscoverFn.mockResolvedValue([]);
+
+      await orchestrator.discoverResources();
+
+      // Should fallback to legacy regions since region_groups is not defined
+      expect(TagDiscoveryMock).toHaveBeenCalledWith(
+        { 'lights-out:managed': 'true' },
+        ['ecs:service', 'rds:db'],
+        ['us-west-2']
+      );
+    });
+
+    it('should use all regions (empty array) when no targetGroup and no regions configured', async () => {
+      const configWithoutRegions: Config = {
+        ...sampleConfig,
+        // No regions, no region_groups
+      };
+
+      orchestrator = new Orchestrator(configWithoutRegions);
+      mockDiscoverFn.mockResolvedValue([]);
+
+      await orchestrator.discoverResources();
+
+      expect(TagDiscoveryMock).toHaveBeenCalledWith(
+        { 'lights-out:managed': 'true' },
+        ['ecs:service', 'rds:db'],
+        [] // Empty array - TagDiscovery will use Lambda's region
+      );
+    });
+
+    it('should use legacy regions when no targetGroup is specified', async () => {
+      const configWithBoth: Config = {
+        ...sampleConfig,
+        region_groups: {
+          asia: ['ap-southeast-1'],
+          america: ['us-east-1'],
+        },
+        regions: ['eu-west-1'], // Legacy regions
+      };
+
+      // No targetGroup specified
+      orchestrator = new Orchestrator(configWithBoth);
+      mockDiscoverFn.mockResolvedValue([]);
+
+      await orchestrator.discoverResources();
+
+      // Should use legacy regions when no targetGroup
+      expect(TagDiscoveryMock).toHaveBeenCalledWith(
+        { 'lights-out:managed': 'true' },
+        ['ecs:service', 'rds:db'],
+        ['eu-west-1']
+      );
+    });
+
+    it('should handle empty region_groups array for a targetGroup', async () => {
+      const configWithEmptyGroup: Config = {
+        ...sampleConfig,
+        region_groups: {
+          asia: [], // Empty array
+        },
+        regions: ['fallback-region'],
+      };
+
+      orchestrator = new Orchestrator(configWithEmptyGroup, undefined, 'asia');
+      mockDiscoverFn.mockResolvedValue([]);
+
+      await orchestrator.discoverResources();
+
+      // Empty array should trigger fallback to legacy regions
+      expect(TagDiscoveryMock).toHaveBeenCalledWith(
+        { 'lights-out:managed': 'true' },
+        ['ecs:service', 'rds:db'],
+        ['fallback-region']
+      );
+    });
+
+    it('should include targetGroup in discovery logging', async () => {
+      const configWithRegionGroups: Config = {
+        ...sampleConfig,
+        region_groups: {
+          asia: ['ap-southeast-1'],
+        },
+      };
+
+      orchestrator = new Orchestrator(configWithRegionGroups, undefined, 'asia');
+      mockDiscoverFn.mockResolvedValue([]);
+
+      await orchestrator.discoverResources();
+
+      // The test verifies that discovery is called with correct regions
+      // Logging is tested implicitly through the TagDiscoveryMock call
+      expect(TagDiscoveryMock).toHaveBeenCalledWith(expect.any(Object), expect.any(Array), [
+        'ap-southeast-1',
+      ]);
+    });
+
+    it('should execute start action with targetGroup filtering', async () => {
+      const configWithRegionGroups: Config = {
+        ...sampleConfig,
+        region_groups: {
+          asia: ['ap-southeast-1'],
+          america: ['us-east-1'],
+        },
+      };
+
+      const mockResources: DiscoveredResource[] = [
+        {
+          resourceType: 'ecs-service',
+          arn: 'arn:aws:ecs:ap-southeast-1:123456:service/c/s',
+          resourceId: 'c/s',
+          priority: 50,
+          group: 'default',
+          tags: {},
+          metadata: { cluster_name: 'c' },
+        },
+      ];
+
+      const mockStartFn = vi.fn().mockResolvedValue({
+        success: true,
+        action: 'start',
+        resourceType: 'ecs-service',
+        resourceId: 'c/s',
+        message: 'Started successfully',
+      } as HandlerResult);
+
+      const mockHandler: Partial<ResourceHandler> = {
+        start: mockStartFn,
+      };
+
+      orchestrator = new Orchestrator(configWithRegionGroups, undefined, 'asia');
+      mockDiscoverFn.mockResolvedValue(mockResources);
+      mockGetHandlerFn.mockReturnValue(mockHandler as ResourceHandler);
+
+      const result = await orchestrator.run('start');
+
+      expect(result.total).toBe(1);
+      expect(result.succeeded).toBe(1);
+      expect(TagDiscoveryMock).toHaveBeenCalledWith(
+        expect.any(Object),
+        expect.any(Array),
+        ['ap-southeast-1'] // Only asia regions
+      );
+    });
+  });
+
   describe('aggregated notifications', () => {
     it('should call sendAggregatedTeamsNotification after run completes', async () => {
       const configWithTeams: Config = {

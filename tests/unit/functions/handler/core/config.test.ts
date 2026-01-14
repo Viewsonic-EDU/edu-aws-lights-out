@@ -605,4 +605,340 @@ resource_defaults:
       await expect(loadConfigFromSsm('/test/parameter')).rejects.toThrow(ConfigValidationError);
     });
   });
+
+  describe('Regional Schedules Configuration', () => {
+    describe('region_groups validation', () => {
+      it('should accept valid region_groups configuration', async () => {
+        const configWithRegionGroups = `
+version: "1.0"
+environment: test
+discovery:
+  method: tag-based
+region_groups:
+  asia:
+    - ap-southeast-1
+    - ap-northeast-1
+  america:
+    - us-east-1
+`;
+
+        ssmMock.on(GetParameterCommand).resolves({
+          Parameter: { Value: configWithRegionGroups },
+        });
+
+        const config = await loadConfigFromSsm('/test/parameter');
+
+        expect(config.region_groups).toBeDefined();
+        expect(config.region_groups?.asia).toEqual(['ap-southeast-1', 'ap-northeast-1']);
+        expect(config.region_groups?.america).toEqual(['us-east-1']);
+      });
+
+      it('should accept configuration without region_groups (backward compatible)', async () => {
+        const configWithoutRegionGroups = `
+version: "1.0"
+environment: test
+discovery:
+  method: tag-based
+regions:
+  - us-east-1
+  - ap-southeast-1
+`;
+
+        ssmMock.on(GetParameterCommand).resolves({
+          Parameter: { Value: configWithoutRegionGroups },
+        });
+
+        const config = await loadConfigFromSsm('/test/parameter');
+
+        expect(config.region_groups).toBeUndefined();
+        expect(config.regions).toEqual(['us-east-1', 'ap-southeast-1']);
+      });
+
+      it('should accept empty region_groups', async () => {
+        const configWithEmptyRegionGroups = `
+version: "1.0"
+environment: test
+discovery:
+  method: tag-based
+region_groups: {}
+`;
+
+        ssmMock.on(GetParameterCommand).resolves({
+          Parameter: { Value: configWithEmptyRegionGroups },
+        });
+
+        const config = await loadConfigFromSsm('/test/parameter');
+
+        expect(config.region_groups).toEqual({});
+      });
+    });
+
+    describe('group_schedules validation', () => {
+      it('should accept valid group_schedules configuration', async () => {
+        const configWithGroupSchedules = `
+version: "1.0"
+environment: test
+discovery:
+  method: tag-based
+region_groups:
+  asia:
+    - ap-southeast-1
+group_schedules:
+  asia:
+    timezone: Asia/Taipei
+    start:
+      expression: "0 0 ? * MON-FRI *"
+      description: "Start Asia resources at 08:00 CST"
+      enabled: true
+    stop:
+      expression: "0 14 ? * MON-FRI *"
+      description: "Stop Asia resources at 22:00 CST"
+      enabled: true
+`;
+
+        ssmMock.on(GetParameterCommand).resolves({
+          Parameter: { Value: configWithGroupSchedules },
+        });
+
+        const config = await loadConfigFromSsm('/test/parameter');
+
+        expect(config.group_schedules).toBeDefined();
+        expect(config.group_schedules?.asia).toBeDefined();
+        expect(config.group_schedules?.asia.timezone).toBe('Asia/Taipei');
+        expect(config.group_schedules?.asia.start.expression).toBe('0 0 ? * MON-FRI *');
+        expect(config.group_schedules?.asia.start.enabled).toBe(true);
+        expect(config.group_schedules?.asia.stop.expression).toBe('0 14 ? * MON-FRI *');
+        expect(config.group_schedules?.asia.stop.enabled).toBe(true);
+      });
+
+      it('should accept group_schedules without timezone (optional)', async () => {
+        const configWithoutTimezone = `
+version: "1.0"
+environment: test
+discovery:
+  method: tag-based
+group_schedules:
+  asia:
+    start:
+      expression: "0 0 ? * MON-FRI *"
+      enabled: true
+    stop:
+      expression: "0 14 ? * MON-FRI *"
+      enabled: false
+`;
+
+        ssmMock.on(GetParameterCommand).resolves({
+          Parameter: { Value: configWithoutTimezone },
+        });
+
+        const config = await loadConfigFromSsm('/test/parameter');
+
+        expect(config.group_schedules?.asia.timezone).toBeUndefined();
+        expect(config.group_schedules?.asia.start.enabled).toBe(true);
+        expect(config.group_schedules?.asia.stop.enabled).toBe(false);
+      });
+
+      it('should accept group_schedules without description (optional)', async () => {
+        const configWithoutDescription = `
+version: "1.0"
+environment: test
+discovery:
+  method: tag-based
+group_schedules:
+  america:
+    start:
+      expression: "0 13 ? * MON-FRI *"
+      enabled: true
+    stop:
+      expression: "0 23 ? * MON-FRI *"
+      enabled: true
+`;
+
+        ssmMock.on(GetParameterCommand).resolves({
+          Parameter: { Value: configWithoutDescription },
+        });
+
+        const config = await loadConfigFromSsm('/test/parameter');
+
+        expect(config.group_schedules?.america.start.description).toBeUndefined();
+        expect(config.group_schedules?.america.stop.description).toBeUndefined();
+      });
+
+      it('should reject group_schedules with missing start.expression', async () => {
+        const invalidConfig = `
+version: "1.0"
+environment: test
+discovery:
+  method: tag-based
+group_schedules:
+  asia:
+    start:
+      enabled: true
+    stop:
+      expression: "0 14 ? * MON-FRI *"
+      enabled: true
+`;
+
+        ssmMock.on(GetParameterCommand).resolves({
+          Parameter: { Value: invalidConfig },
+        });
+
+        await expect(loadConfigFromSsm('/test/parameter')).rejects.toThrow(ConfigValidationError);
+      });
+
+      it('should reject group_schedules with missing start.enabled', async () => {
+        const invalidConfig = `
+version: "1.0"
+environment: test
+discovery:
+  method: tag-based
+group_schedules:
+  asia:
+    start:
+      expression: "0 0 ? * MON-FRI *"
+    stop:
+      expression: "0 14 ? * MON-FRI *"
+      enabled: true
+`;
+
+        ssmMock.on(GetParameterCommand).resolves({
+          Parameter: { Value: invalidConfig },
+        });
+
+        await expect(loadConfigFromSsm('/test/parameter')).rejects.toThrow(ConfigValidationError);
+      });
+
+      it('should reject group_schedules with empty expression', async () => {
+        const invalidConfig = `
+version: "1.0"
+environment: test
+discovery:
+  method: tag-based
+group_schedules:
+  asia:
+    start:
+      expression: ""
+      enabled: true
+    stop:
+      expression: "0 14 ? * MON-FRI *"
+      enabled: true
+`;
+
+        ssmMock.on(GetParameterCommand).resolves({
+          Parameter: { Value: invalidConfig },
+        });
+
+        await expect(loadConfigFromSsm('/test/parameter')).rejects.toThrow(ConfigValidationError);
+      });
+
+      it('should accept multiple groups in group_schedules', async () => {
+        const configWithMultipleGroups = `
+version: "1.0"
+environment: test
+discovery:
+  method: tag-based
+region_groups:
+  asia:
+    - ap-southeast-1
+    - ap-northeast-1
+  america:
+    - us-east-1
+group_schedules:
+  asia:
+    timezone: Asia/Taipei
+    start:
+      expression: "0 0 ? * MON-FRI *"
+      enabled: true
+    stop:
+      expression: "0 14 ? * MON-FRI *"
+      enabled: true
+  america:
+    timezone: America/New_York
+    start:
+      expression: "0 13 ? * MON-FRI *"
+      enabled: true
+    stop:
+      expression: "0 23 ? * MON-FRI *"
+      enabled: true
+`;
+
+        ssmMock.on(GetParameterCommand).resolves({
+          Parameter: { Value: configWithMultipleGroups },
+        });
+
+        const config = await loadConfigFromSsm('/test/parameter');
+
+        expect(Object.keys(config.group_schedules || {})).toHaveLength(2);
+        expect(config.group_schedules?.asia).toBeDefined();
+        expect(config.group_schedules?.america).toBeDefined();
+      });
+    });
+
+    describe('combined region_groups and group_schedules', () => {
+      it('should accept full regional schedules configuration', async () => {
+        const fullConfig = `
+version: "1.0"
+environment: pg-stage-airsync-stage
+discovery:
+  method: tags
+  tags:
+    lights-out:managed: "true"
+    lights-out:project: airsync-stage
+  resource_types:
+    - ecs:service
+region_groups:
+  asia:
+    - ap-southeast-1
+    - ap-northeast-1
+  america:
+    - us-east-1
+group_schedules:
+  asia:
+    timezone: Asia/Taipei
+    start:
+      expression: "0 0 ? * MON-FRI *"
+      description: "Start Asia resources at 08:00 CST"
+      enabled: true
+    stop:
+      expression: "0 14 ? * MON-FRI *"
+      description: "Stop Asia resources at 22:00 CST"
+      enabled: true
+  america:
+    timezone: America/New_York
+    start:
+      expression: "0 13 ? * MON-FRI *"
+      description: "Start America resources at 08:00 EST"
+      enabled: true
+    stop:
+      expression: "0 23 ? * MON-FRI *"
+      description: "Stop America resources at 18:00 EST"
+      enabled: true
+resource_defaults:
+  ecs-service:
+    waitForStable: true
+    stableTimeoutSeconds: 300
+    start:
+      desiredCount: 2
+    stop:
+      desiredCount: 0
+`;
+
+        ssmMock.on(GetParameterCommand).resolves({
+          Parameter: { Value: fullConfig },
+        });
+
+        const config = await loadConfigFromSsm('/test/parameter');
+
+        expect(config.environment).toBe('pg-stage-airsync-stage');
+        expect(config.region_groups?.asia).toEqual(['ap-southeast-1', 'ap-northeast-1']);
+        expect(config.region_groups?.america).toEqual(['us-east-1']);
+        expect(config.group_schedules?.asia.timezone).toBe('Asia/Taipei');
+        expect(config.group_schedules?.america.timezone).toBe('America/New_York');
+        expect(config.discovery.tags).toEqual({
+          'lights-out:managed': 'true',
+          'lights-out:project': 'airsync-stage',
+        });
+      });
+    });
+  });
 });

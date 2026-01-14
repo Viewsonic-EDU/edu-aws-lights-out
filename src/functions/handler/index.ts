@@ -86,9 +86,13 @@ export async function main(event: LambdaEvent, context: Context): Promise<Lambda
   const actionStr = event.action ?? 'status';
   const action = validateAction(actionStr);
 
+  // Extract targetGroup for regional scheduling (optional)
+  const targetGroup = event.targetGroup;
+
   logger.info(
     {
       action: actionStr,
+      targetGroup: targetGroup ?? 'all',
       requestId,
       functionName,
     },
@@ -121,8 +125,8 @@ export async function main(event: LambdaEvent, context: Context): Promise<Lambda
 
     const config = await loadConfigFromSsm(configParameter);
 
-    // Initialize orchestrator with trigger source
-    const orchestrator = new Orchestrator(config, triggerSource);
+    // Initialize orchestrator with trigger source and target group
+    const orchestrator = new Orchestrator(config, triggerSource, targetGroup);
 
     // Execute action
     if (action === 'discover') {

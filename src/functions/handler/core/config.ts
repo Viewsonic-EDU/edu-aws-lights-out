@@ -15,6 +15,38 @@ import { setupLogger } from '@shared/utils/logger';
 const logger = setupLogger('lights-out:config');
 
 /**
+ * Schedule action config schema validation.
+ * Used in group_schedules for regional scheduling.
+ */
+const ScheduleActionConfigSchema = z.object({
+  expression: z.string().min(1, 'Cron expression is required'),
+  description: z.string().optional(),
+  enabled: z.boolean(),
+});
+
+/**
+ * Group schedule config schema validation.
+ * Defines start and stop schedules for a region group.
+ */
+const GroupScheduleConfigSchema = z.object({
+  timezone: z.string().optional(),
+  start: ScheduleActionConfigSchema,
+  stop: ScheduleActionConfigSchema,
+});
+
+/**
+ * Region groups schema validation.
+ * Maps group names to arrays of AWS region codes.
+ */
+const RegionGroupsSchema = z.record(z.string(), z.array(z.string().min(1)));
+
+/**
+ * Group schedules schema validation.
+ * Maps group names to their schedule configurations.
+ */
+const GroupSchedulesSchema = z.record(z.string(), GroupScheduleConfigSchema);
+
+/**
  * ECS Action Config schema validation.
  *
  * Validates the unified start/stop configuration for ECS services.
@@ -52,7 +84,9 @@ const ConfigSchema = z
   .object({
     version: z.string(),
     environment: z.string(),
-    regions: z.array(z.string()).optional(), // Optional list of AWS regions to scan
+    regions: z.array(z.string()).optional(), // Optional list of AWS regions to scan (legacy)
+    region_groups: RegionGroupsSchema.optional(), // New: region groups for regional scheduling
+    group_schedules: GroupSchedulesSchema.optional(), // New: per-group schedules
     discovery: z
       .object({
         method: z.string(),
