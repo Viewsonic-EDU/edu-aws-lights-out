@@ -374,6 +374,78 @@ describe('teamsNotifier', () => {
       expect(success.size).toBe(0);
       expect(failed.size).toBe(0);
     });
+
+    it('should skip idempotent results', () => {
+      const results: HandlerResult[] = [
+        {
+          success: true,
+          action: 'start',
+          resourceType: 'ecs-service',
+          resourceId: 'cluster/service1',
+          message: 'Service started',
+          region: 'us-east-1',
+        },
+        {
+          success: true,
+          action: 'start',
+          resourceType: 'ecs-service',
+          resourceId: 'cluster/service2',
+          message: 'Service already at desired count 2',
+          region: 'us-east-1',
+          idempotent: true, // This should be skipped
+        },
+        {
+          success: true,
+          action: 'stop',
+          resourceType: 'rds-db',
+          resourceId: 'my-database',
+          message: 'DB instance already stopped',
+          region: 'ap-northeast-1',
+          idempotent: true, // This should be skipped
+        },
+      ];
+
+      const { success, failed } = groupResultsByRegionAndStatus(results);
+
+      // Only non-idempotent result should be included
+      expect(success.size).toBe(1);
+      expect(success.has('us-east-1')).toBe(true);
+      expect(success.has('ap-northeast-1')).toBe(false); // skipped because idempotent
+
+      const successRegionMap = success.get('us-east-1')!;
+      expect(successRegionMap.get('ecs-service')).toHaveLength(1);
+      expect(successRegionMap.get('ecs-service')![0].resourceId).toBe('cluster/service1');
+
+      expect(failed.size).toBe(0);
+    });
+
+    it('should return empty maps when all results are idempotent', () => {
+      const results: HandlerResult[] = [
+        {
+          success: true,
+          action: 'start',
+          resourceType: 'ecs-service',
+          resourceId: 'cluster/service1',
+          message: 'Service already at desired count 2',
+          region: 'us-east-1',
+          idempotent: true,
+        },
+        {
+          success: true,
+          action: 'stop',
+          resourceType: 'rds-db',
+          resourceId: 'my-database',
+          message: 'DB instance already stopped',
+          region: 'us-east-1',
+          idempotent: true,
+        },
+      ];
+
+      const { success, failed } = groupResultsByRegionAndStatus(results);
+
+      expect(success.size).toBe(0);
+      expect(failed.size).toBe(0);
+    });
   });
 
   describe('sendAggregatedTeamsNotification', () => {
@@ -764,6 +836,98 @@ describe('teamsNotifier', () => {
       // Verify trigger source is formatted correctly
       expect(bodyText).toContain('EventBridge');
       expect(bodyText).toContain('lights-out-test-start');
+    });
+
+    it('should skip notification when all results are idempotent', async () => {
+      const results: HandlerResult[] = [
+        {
+          success: true,
+          action: 'start',
+          resourceType: 'ecs-service',
+          resourceId: 'cluster/service1',
+          message: 'Service already at desired count 2',
+          region: 'us-east-1',
+          idempotent: true,
+        },
+        {
+          success: true,
+          action: 'stop',
+          resourceType: 'rds-db',
+          resourceId: 'my-database',
+          message: 'DB instance already stopped',
+          region: 'ap-northeast-1',
+          idempotent: true,
+        },
+      ];
+
+      await sendAggregatedTeamsNotification(
+        mockConfig,
+        results,
+        'test-env',
+        'start',
+        mockTriggerSource
+      );
+
+      // No notifications should be sent because all results are idempotent
+      expect(mockedFetch).not.toHaveBeenCalled();
+    });
+
+    it('should only notify for non-idempotent results', async () => {
+      mockedFetch.mockResolvedValue({
+        ok: true,
+        status: 200,
+        statusText: 'OK',
+      } as Response);
+
+      const results: HandlerResult[] = [
+        {
+          success: true,
+          action: 'start',
+          resourceType: 'ecs-service',
+          resourceId: 'cluster/service1',
+          message: 'Service started',
+          region: 'us-east-1',
+        },
+        {
+          success: true,
+          action: 'start',
+          resourceType: 'ecs-service',
+          resourceId: 'cluster/service2',
+          message: 'Service already at desired count 2',
+          region: 'us-east-1',
+          idempotent: true, // This should be skipped
+        },
+        {
+          success: true,
+          action: 'start',
+          resourceType: 'rds-db',
+          resourceId: 'my-database',
+          message: 'DB instance already available',
+          region: 'us-east-1',
+          idempotent: true, // This should be skipped
+        },
+      ];
+
+      await sendAggregatedTeamsNotification(
+        mockConfig,
+        results,
+        'test-env',
+        'start',
+        mockTriggerSource
+      );
+
+      // Only 1 notification for the non-idempotent result
+      expect(mockedFetch).toHaveBeenCalledTimes(1);
+
+      const call = mockedFetch.mock.calls[0];
+      const body = JSON.parse(call[1]?.body as string);
+      const cardContent = body.attachments[0].content;
+      const bodyText = JSON.stringify(cardContent.body);
+
+      // Should only contain the non-idempotent resource
+      expect(bodyText).toContain('cluster/service1');
+      expect(bodyText).not.toContain('cluster/service2');
+      expect(bodyText).not.toContain('my-database');
     });
   });
 });

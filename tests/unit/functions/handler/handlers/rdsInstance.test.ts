@@ -291,6 +291,7 @@ describe('RDSInstanceHandler', () => {
 
       expect(result.success).toBe(true);
       expect(result.message).toContain('DB instance already stopped');
+      expect(result.idempotent).toBe(true);
 
       const stopCalls = rdsMock.commandCalls(StopDBInstanceCommand);
       expect(stopCalls).toHaveLength(0);
@@ -310,6 +311,7 @@ describe('RDSInstanceHandler', () => {
 
       expect(result.success).toBe(true);
       expect(result.message).toContain('DB instance already stopping');
+      expect(result.idempotent).toBe(true);
 
       const stopCalls = rdsMock.commandCalls(StopDBInstanceCommand);
       expect(stopCalls).toHaveLength(0);
@@ -408,6 +410,7 @@ describe('RDSInstanceHandler', () => {
 
       expect(result.success).toBe(true);
       expect(result.message).toContain('DB instance already available');
+      expect(result.idempotent).toBe(true);
 
       const startCalls = rdsMock.commandCalls(StartDBInstanceCommand);
       expect(startCalls).toHaveLength(0);
@@ -427,6 +430,7 @@ describe('RDSInstanceHandler', () => {
 
       expect(result.success).toBe(true);
       expect(result.message).toContain('DB instance already starting');
+      expect(result.idempotent).toBe(true);
 
       const startCalls = rdsMock.commandCalls(StartDBInstanceCommand);
       expect(startCalls).toHaveLength(0);

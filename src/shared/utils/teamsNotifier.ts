@@ -240,6 +240,11 @@ function groupResultsByRegionAndStatus(results: HandlerResult[]): {
   const failed = new Map<string, Map<string, HandlerResult[]>>();
 
   for (const result of results) {
+    if (result.idempotent) {
+      // Skip idempotent results
+      continue;
+    }
+
     const target = result.success ? success : failed;
     const region = result.region || 'unknown';
 
