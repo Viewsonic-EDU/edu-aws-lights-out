@@ -176,6 +176,7 @@ export class RDSInstanceHandler implements ResourceHandler {
           resourceId: this.resource.resourceId,
           message: `DB instance already ${currentStatus.status}`,
           previousState: currentStatus,
+          idempotent: true,
         };
       }
 
@@ -336,6 +337,7 @@ export class RDSInstanceHandler implements ResourceHandler {
           resourceId: this.resource.resourceId,
           message: `DB instance already ${currentStatus.status}`,
           previousState: currentStatus,
+          idempotent: true,
         };
       }
 

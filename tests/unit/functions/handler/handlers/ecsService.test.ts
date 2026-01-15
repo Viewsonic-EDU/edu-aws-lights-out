@@ -266,6 +266,7 @@ describe('ECSServiceHandler', () => {
 
         expect(result.success).toBe(true);
         expect(result.message).toContain('Service already at target count 0');
+        expect(result.idempotent).toBe(true);
 
         // UpdateServiceCommand should NOT be called
         const updateCalls = ecsMock.commandCalls(UpdateServiceCommand);
@@ -531,6 +532,7 @@ describe('ECSServiceHandler', () => {
 
         expect(result.success).toBe(true);
         expect(result.message).toContain('Service already at desired count 2');
+        expect(result.idempotent).toBe(true);
 
         const updateCalls = ecsMock.commandCalls(UpdateServiceCommand);
         expect(updateCalls).toHaveLength(0);

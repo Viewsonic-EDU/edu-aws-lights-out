@@ -189,6 +189,7 @@ export interface HandlerResult {
   resourceId: string;
   message: string;
   previousState?: Record<string, unknown>;
+  idempotent?: boolean;
   error?: string;
   /**
    * Trigger source metadata (passed to Teams notifier).

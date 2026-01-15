@@ -342,6 +342,7 @@ export class ECSServiceHandler implements ResourceHandler {
           resourceId: this.resource.resourceId,
           message: `Service already at target count ${desiredCount}`,
           previousState: currentStatus,
+          idempotent: true,
         };
       }
 
@@ -472,6 +473,7 @@ export class ECSServiceHandler implements ResourceHandler {
           resourceId: this.resource.resourceId,
           message: `Service already at desired count ${desiredCount}`,
           previousState: currentStatus,
+          idempotent: true,
         };
       }
 
