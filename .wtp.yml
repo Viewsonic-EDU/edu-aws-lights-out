@@ -4,7 +4,7 @@ version: '1.0'
 # Default settings for worktrees
 defaults:
   # Base directory for worktrees (relative to repository root)
-  base_dir: ../worktrees/aws-lights-out-plan
+  base_dir: ../worktrees/edu-aws-lights-out
 
 # Hooks that run after creating a worktree
 hooks:

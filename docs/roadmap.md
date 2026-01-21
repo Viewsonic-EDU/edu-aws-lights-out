@@ -8,21 +8,21 @@
 
 採用「集中式 + 分散式」並行策略，讓 AWS Lights Out Plan 能快速推廣至多個專案。
 
-```
+```md
 +------------------------------------------------------------------+
-|                        PRE-LANDING STRATEGY                       |
+| PRE-LANDING STRATEGY |
 +------------------------------------------------------------------+
-|                                                                    |
-|  +-- CENTRALIZED MODE --+        +-- DISTRIBUTED MODE --+         |
-|  |  (Quick Onboarding)  |        |  (npm package)       |         |
-|  |                      |        |                      |         |
-|  | aws-lights-out-plan  |        | @vs-infra/lights-out |         |
-|  | (this repo)          |        | (published to npm)   |         |
-|  |                      |        |                      |         |
-|  | - Config per project |        | - Self-hosted Lambda |         |
-|  | - Shared Lambda      |        | - Local config       |         |
-|  | - scripts/arguments/ |        | - Full CLI tools     |         |
-|  +----------------------+        +----------------------+         |
+| |
+| +-- CENTRALIZED MODE --+ +-- DISTRIBUTED MODE --+ |
+| | (Quick Onboarding) | | (npm package) | |
+| | | | | |
+| | edu-aws-lights-out | | @vs-edu/lights-out | |
+| | (this repo) | | (published to npm) | |
+| | | | | |
+| | - Config per project | | - Self-hosted Lambda | |
+| | - Shared Lambda | | - Local config | |
+| | - scripts/arguments/ | | - Full CLI tools | |
+| +----------------------+ +----------------------+ |
 +------------------------------------------------------------------+
 ```
 
@@ -65,7 +65,7 @@
 
 ### Package 結構
 
-```
+```ini
 @vs-infra/lights-out/
 ├── dist/
 │   ├── index.js              # Main entry point
@@ -128,7 +128,7 @@ tag scan/apply          # 標籤管理
 
 ### 架構
 
-```
+```yaml
 +-- MCP SERVER (Primary) --+    +-- CLI Fallback --+
 |                          |    |                   |
 | Tools:                   |    | Commands:         |
