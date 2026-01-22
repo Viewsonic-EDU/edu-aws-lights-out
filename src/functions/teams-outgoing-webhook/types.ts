@@ -3,14 +3,26 @@
  */
 
 /**
+ * Teams Outgoing Webhook base payload structure.
+ */
+export interface OutgoingWebhookBasePayload {
+  /**
+   * Message type.
+   */
+  type: string;
+
+  [key: string]: unknown;
+}
+
+/**
  * Teams Outgoing Webhook message structure.
  * Represents the payload sent by Teams when a user @mentions the bot.
  *
  * @see https://learn.microsoft.com/en-us/microsoftteams/platform/webhooks-and-connectors/how-to/add-outgoing-webhook
  */
-export interface OutgoingWebhookMessage {
+export interface OutgoingWebhookMessage extends OutgoingWebhookBasePayload {
   /**
-   * Message type (always 'message' for Outgoing Webhooks).
+   * Message type (always 'message' for bot messages).
    */
   type: 'message';
 
@@ -62,8 +74,6 @@ export interface OutgoingWebhookMessage {
 
     [key: string]: unknown;
   };
-
-  [key: string]: unknown;
 }
 
 /**

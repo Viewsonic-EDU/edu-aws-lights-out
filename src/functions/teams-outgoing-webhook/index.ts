@@ -13,7 +13,7 @@
 
 import type { APIGatewayProxyEvent, APIGatewayProxyResult, Context } from 'aws-lambda';
 import type { TriggerSource } from '@shared/types';
-import type { OutgoingWebhookMessage } from './types';
+import type { OutgoingWebhookMessage, OutgoingWebhookBasePayload } from './types';
 import { validateHmacSignature, getSecurityToken } from './core/hmacAuthenticator';
 import { parseCommand } from './core/commandParser';
 import { invokeMainHandler } from './core/handlerInvoker';
@@ -103,8 +103,23 @@ export async function main(
 
     logger.info({ requestId }, 'HMAC signature validated successfully');
 
-    // 3. Parse Teams message
-    const message = JSON.parse(event.body) as OutgoingWebhookMessage;
+    // 3. Parse Teams payload
+    const payload = JSON.parse(event.body) as OutgoingWebhookBasePayload;
+
+    // Handle verification request (when creating webhook in Teams)
+    // Teams sends a test message to verify the endpoint is valid
+    if (payload.type !== 'message') {
+      logger.info(
+        { requestId, type: payload.type },
+        'Received non-message payload (likely verification request)'
+      );
+
+      // Respond with success to allow webhook creation
+      return buildSuccessResponse('✅ Webhook endpoint verified');
+    }
+
+    // Cast to message type after verification
+    const message = payload as OutgoingWebhookMessage;
 
     logger.info(
       {

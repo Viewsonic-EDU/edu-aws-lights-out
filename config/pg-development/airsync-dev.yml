@@ -11,10 +11,8 @@ notifications:
     description: Power Automate Workflow for Notifications to AirSync App Development.
     outgoing_webhook:
       enabled: true
-      # Allowlist of Teams display names who can execute bot commands.
-      # If empty or omitted, all users are allowed.
-      # Example: ["John Doe", "Jane Smith"]
-      allowed_users: ['Yuri Tsai']
+      allowed_users:
+        - Yuri Tsai
 discovery:
   method: tags
   tags:
