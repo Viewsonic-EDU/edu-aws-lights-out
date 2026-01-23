@@ -26,6 +26,8 @@ import type {
   ContainerRole,
   RiskLevel,
   TaskDefinitionAnalysis,
+  EnvironmentVariable,
+  ServiceUrlReference,
 } from '../types.js';
 
 const LIGHTS_OUT_TAG_KEY = 'lights-out:managed';
@@ -63,6 +65,146 @@ const SIDECAR_IMAGE_PATTERNS = [
   'prometheus',
   'grafana',
 ];
+
+// Patterns for service URL environment variables
+const SERVICE_URL_PATTERNS = [
+  /^(.+?)_SERVICE_URL$/i,
+  /^(.+?)_SERVICE_HOST$/i,
+  /^(.+?)_API_URL$/i,
+  /^(.+?)_API_HOST$/i,
+  /^(.+?)_HOST$/i,
+  /^(.+?)_ENDPOINT$/i,
+  /^(.+?)_BASE_URL$/i,
+  /^(.+?)_URL$/i,
+];
+
+// Common infrastructure env vars to exclude from service URL detection
+const INFRA_ENV_VAR_PREFIXES = [
+  'AWS_',
+  'DD_',
+  'OTEL_',
+  'NEW_RELIC_',
+  'LOG_',
+  'REDIS_',
+  'DATABASE_',
+  'DB_',
+  'MONGO',
+  'POSTGRES',
+  'MYSQL',
+  'ELASTIC',
+  'KAFKA',
+  'RABBITMQ',
+  'SQS_',
+  'SNS_',
+  'S3_',
+];
+
+/**
+ * Check if an environment variable name is likely infrastructure-related
+ */
+function isInfraEnvVar(name: string): boolean {
+  const upperName = name.toUpperCase();
+  return INFRA_ENV_VAR_PREFIXES.some((prefix) => upperName.startsWith(prefix));
+}
+
+/**
+ * Extract service name from URL value
+ */
+function extractServiceNameFromUrl(url: string): string | undefined {
+  try {
+    // Try to parse as URL
+    const parsed = new URL(url);
+    const hostname = parsed.hostname;
+
+    // Common patterns: vs-auth-dev.internal, auth-service.local, auth.svc.cluster.local
+    const patterns = [
+      /^([a-z0-9-]+)\.internal$/i,
+      /^([a-z0-9-]+)\.local$/i,
+      /^([a-z0-9-]+)\.svc\.cluster\.local$/i,
+      /^([a-z0-9-]+)-service/i,
+      /^vs-([a-z0-9-]+)/i,
+    ];
+
+    for (const pattern of patterns) {
+      const match = hostname.match(pattern);
+      if (match) {
+        return match[1];
+      }
+    }
+
+    // Fallback: use first part of hostname
+    const parts = hostname.split('.');
+    if (parts.length > 0) {
+      return parts[0];
+    }
+  } catch {
+    // Not a valid URL, try to extract from string
+    const match = url.match(/([a-z0-9-]+)/i);
+    if (match) {
+      return match[1];
+    }
+  }
+  return undefined;
+}
+
+/**
+ * Infer service URL references from environment variables
+ */
+function inferServiceUrls(envVars: EnvironmentVariable[]): ServiceUrlReference[] {
+  const serviceUrls: ServiceUrlReference[] = [];
+
+  for (const envVar of envVars) {
+    // Skip infrastructure env vars
+    if (isInfraEnvVar(envVar.name)) continue;
+
+    // Check if this looks like a service URL
+    for (const pattern of SERVICE_URL_PATTERNS) {
+      const match = envVar.name.match(pattern);
+      if (match) {
+        const servicePart = match[1];
+
+        // Determine confidence level
+        let confidence: 'high' | 'medium' | 'low' = 'low';
+        let targetService: string | undefined;
+
+        // High confidence: SERVICE_URL or API_URL patterns with a value
+        if (
+          envVar.name.endsWith('_SERVICE_URL') ||
+          envVar.name.endsWith('_SERVICE_HOST') ||
+          envVar.name.endsWith('_API_URL')
+        ) {
+          confidence = 'high';
+        } else if (envVar.name.endsWith('_ENDPOINT') || envVar.name.endsWith('_HOST')) {
+          confidence = 'medium';
+        }
+
+        // Try to extract service name from value if available
+        if (envVar.value) {
+          targetService = extractServiceNameFromUrl(envVar.value);
+          if (targetService) {
+            confidence = 'high';
+          }
+        }
+
+        // If no service name from URL, use the env var prefix
+        if (!targetService) {
+          targetService = servicePart.toLowerCase().replace(/_/g, '-');
+        }
+
+        serviceUrls.push({
+          envVarName: envVar.name,
+          value: envVar.value,
+          targetService,
+          confidence,
+        });
+
+        break; // Only match first pattern
+      }
+    }
+  }
+
+  return serviceUrls;
+}
 
 /**
  * Classifies a container's role based on its name and image.
@@ -177,7 +319,39 @@ async function analyzeTaskDefinition(
         essential: containerDef.essential ?? true,
       });
 
-      containers.push({
+      // Extract environment variables
+      const environment: EnvironmentVariable[] = [];
+
+      // Regular environment variables
+      if (containerDef.environment) {
+        for (const env of containerDef.environment) {
+          if (env.name) {
+            environment.push({
+              name: env.name,
+              value: env.value || undefined,
+              isSecret: false,
+            });
+          }
+        }
+      }
+
+      // Secrets (from SSM/Secrets Manager)
+      if (containerDef.secrets) {
+        for (const secret of containerDef.secrets) {
+          if (secret.name) {
+            environment.push({
+              name: secret.name,
+              isSecret: true,
+              secretArn: secret.valueFrom,
+            });
+          }
+        }
+      }
+
+      // Infer service URLs from environment variables
+      const serviceUrls = inferServiceUrls(environment);
+
+      const containerInfo: ContainerInfo = {
         name,
         image,
         essential: containerDef.essential ?? true,
@@ -187,7 +361,17 @@ async function analyzeTaskDefinition(
         role,
         riskLevel,
         riskReasons: reasons,
-      });
+      };
+
+      // Only include environment and serviceUrls if they have content
+      if (environment.length > 0) {
+        containerInfo.environment = environment;
+      }
+      if (serviceUrls.length > 0) {
+        containerInfo.serviceUrls = serviceUrls;
+      }
+
+      containers.push(containerInfo);
 
       // Update overall risk level
       if (riskLevel === 'high') {

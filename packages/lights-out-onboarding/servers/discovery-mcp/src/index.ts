@@ -19,11 +19,15 @@ import { discoverEcsServices } from './tools/discoverEcs.js';
 import { discoverRdsInstances } from './tools/discoverRds.js';
 import { listAvailableRegions } from './tools/listRegions.js';
 import { scanIacDirectory } from './tools/scanIacDirectory.js';
+import { scanBackendProject } from './tools/scanBackendProject.js';
+import { analyzeDependencies } from './tools/analyzeDependencies.js';
 import {
   VerifyCredentialsInputSchema,
   DiscoverEcsInputSchema,
   DiscoverRdsInputSchema,
   ScanIacDirectoryInputSchema,
+  ScanBackendProjectInputSchema,
+  AnalyzeDependenciesInputSchema,
 } from './types.js';
 
 const server = new Server(
@@ -116,6 +120,48 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
           required: ['directory'],
         },
       },
+      {
+        name: 'scan_backend_project',
+        description:
+          'Scan a backend project directory for HTTP calls, environment variable usage, and infer service dependencies. Supports TypeScript/JavaScript, Python, and Go projects.',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            directory: {
+              type: 'string',
+              description: 'Path to the backend project directory to scan',
+            },
+            serviceName: {
+              type: 'string',
+              description:
+                'Name of the service this project represents (optional, inferred from directory name if not provided)',
+            },
+          },
+          required: ['directory'],
+        },
+      },
+      {
+        name: 'analyze_dependencies',
+        description:
+          'Analyze service dependencies from multiple sources (ECS discovery, IaC scan, backend project analysis) and generate risk analysis, service groups, and recommended startup/shutdown order',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            ecsServices: {
+              type: 'array',
+              description: 'ECS services from discover_ecs_services result',
+            },
+            iacScanResult: {
+              type: 'object',
+              description: 'Result from scan_iac_directory',
+            },
+            backendAnalysis: {
+              type: 'array',
+              description: 'Results from scan_backend_project (can be multiple projects)',
+            },
+          },
+        },
+      },
     ],
   };
 });
@@ -180,6 +226,32 @@ server.setRequestHandler(CallToolRequestSchema, async (request): Promise<CallToo
       case 'scan_iac_directory': {
         const input = ScanIacDirectoryInputSchema.parse(args);
         const result = await scanIacDirectory(input);
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'scan_backend_project': {
+        const input = ScanBackendProjectInputSchema.parse(args);
+        const result = await scanBackendProject(input);
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'analyze_dependencies': {
+        const input = AnalyzeDependenciesInputSchema.parse(args);
+        const result = await analyzeDependencies(input);
         return {
           content: [
             {

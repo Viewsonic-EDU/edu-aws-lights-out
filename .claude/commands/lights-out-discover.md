@@ -65,6 +65,23 @@ options:
 
 ---
 
+## Step 2.5: 詢問後端專案目錄（可選）
+
+使用 AskUserQuestion 詢問：
+
+```
+question: "你是否有後端專案原始碼可以提供作為相依性分析參考？"
+options:
+  - label: "有，我有後端專案"
+    description: "請提供一個或多個專案目錄路徑"
+  - label: "沒有，跳過程式碼分析"
+    description: "僅使用 AWS 資源和 IaC 進行分析"
+```
+
+如果選擇提供後端專案，詢問目錄路徑和對應的服務名稱。
+
+---
+
 ## Step 3: 掃描 IaC 取得區域（如果有提供 IaC 路徑）
 
 使用 `scan_iac_directory` 掃描 IaC 專案。
@@ -82,6 +99,10 @@ IaC 專案掃描結果：
 - ECS 相關: {ecsResources} 個
 - RDS 相關: {rdsResources} 個
 - Auto Scaling 相關: {autoscalingResources} 個
+- Security Group 相關: {securityGroupResources} 個
+- Service Discovery 相關: {serviceDiscoveryResources} 個
+- Load Balancer 相關: {loadBalancerResources} 個
+- 相依性邊: {dependencyEdges} 個
 ```
 
 從結果中提取部署的區域列表（如果可識別）。
@@ -142,9 +163,70 @@ options:
 
 ---
 
+## Step 5.5: 掃描後端專案（如果有提供）
+
+如果使用者在 Step 2.5 提供了後端專案目錄：
+
+使用 `scan_backend_project` 掃描每個專案目錄。
+
+**顯示掃描結果摘要：**
+
+```
+後端專案掃描結果：
+- 專案: {directory}
+- 語言: {language}
+- 掃描檔案: {totalFiles} 個
+- HTTP 呼叫: {filesWithHttpCalls} 個檔案
+- 環境變數: {uniqueEnvVars} 個
+- 推測的相依性: {inferredDependencies} 個
+```
+
+---
+
+## Step 5.6: 執行相依性分析
+
+使用 `analyze_dependencies` 整合所有來源的相依性資訊：
+
+- ECS 服務探索結果
+- IaC 掃描結果（如果有）
+- 後端專案分析結果（如果有）
+
+**顯示分析結果摘要：**
+
+```
+相依性分析結果：
+- 服務節點: {services} 個
+- 相依性邊: {edges} 個
+- 高風險相依性: {highRiskDependencies} 個
+- 服務群組: {serviceGroups} 個
+```
+
+---
+
 ## Step 6: 生成報告
 
-**按照以下固定模板生成報告：**
+**按照以下模板生成報告，注意格式和視覺呈現：**
+
+### 報告格式規範
+
+1. **視覺符號**：使用 emoji 增加可讀性
+   - ✅ 表示支援/低風險
+   - ⚠️ 表示需注意/中等風險
+   - ❌ 表示不支援/高風險
+
+2. **Auto Scaling 欄位格式**：
+   - 有 Auto Scaling: `✅ (min-max)` 如 `✅ (1-2)`
+   - 無 Auto Scaling: `❌`
+
+3. **Lights Out 支援欄位格式**：
+   - `✅ supported`
+   - `⚠️ caution`
+   - `❌ not-supported` 或 `❌ cluster-managed`
+
+4. **風險等級判定**：需根據 Task Definition 分析結果精準判定
+   - `low`: 標準 API/UI 服務，無特殊容器
+   - `medium`: 有 webhook 容器，或可能有背景任務但非核心
+   - `high`: 有 scheduler/worker 容器，或 stopTimeout 過短
 
 ````markdown
 # AWS Lights Out 資源探索報告
@@ -157,36 +239,81 @@ options:
 
 ## 摘要
 
-| 指標                 | 數值                |
-| -------------------- | ------------------- |
-| ECS Services         | {ecs_count}         |
-| RDS Instances        | {rds_count}         |
-| 已有 Lights Out Tags | {tagged_count}      |
-| 建議納入管理         | {recommended_count} |
+| 指標                 | 數值                                          |
+| -------------------- | --------------------------------------------- |
+| ECS Services         | {ecs_count}                                   |
+| RDS Instances        | {rds_count}                                   |
+| 已有 Lights Out Tags | {tagged_count}                                |
+| 建議納入管理         | {ecs_recommended} ECS + {rds_recommended} RDS |
 
 ---
 
 ## ECS Services
 
-| Region   | Cluster   | Service   | 狀態                | Auto Scaling | 風險等級          | Lights Out 支援                   |
-| -------- | --------- | --------- | ------------------- | ------------ | ----------------- | --------------------------------- |
-| {region} | {cluster} | {service} | {running}/{desired} | {yes/no}     | {low/medium/high} | {supported/caution/not-supported} |
+| Region   | Cluster   | Service   | 狀態                | Auto Scaling   | 風險等級        | Lights Out 支援                              |
+| -------- | --------- | --------- | ------------------- | -------------- | --------------- | -------------------------------------------- |
+| {region} | {cluster} | {service} | {running}/{desired} | ✅ (1-2) 或 ❌ | low/medium/high | ✅ supported / ⚠️ caution / ❌ not-supported |
 
 ### 高風險服務說明
 
-{對於 high risk 的服務，列出原因和建議}
+**{service_name} ({risk_level} risk):**
+
+- {風險原因，使用 bullet points}
+- 建議：
+  - {具體建議 1}
+  - {具體建議 2}
+  - {替代方案，如有}
 
 ---
 
 ## RDS Instances
 
-| Region   | Instance ID   | 引擎     | 狀態     | 類型                  | Lights Out 支援                           |
-| -------- | ------------- | -------- | -------- | --------------------- | ----------------------------------------- |
-| {region} | {instance_id} | {engine} | {status} | {標準/Aurora/Replica} | {supported/cluster-managed/not-supported} |
+| Region   | Instance ID   | 引擎     | 狀態     | 類型                                        | Lights Out 支援                                      |
+| -------- | ------------- | -------- | -------- | ------------------------------------------- | ---------------------------------------------------- |
+| {region} | {instance_id} | {engine} | {status} | {標準 RDS/Aurora Cluster 成員/Read Replica} | ✅ supported / ❌ cluster-managed / ❌ not-supported |
 
 ### 不支援的實例說明
 
-{對於 not-supported 的實例，列出原因}
+**{類型} ({count} instances):**
+
+- {原因說明}
+- 目前 Lights Out Lambda **尚未實作** {功能}
+- 如果需要管理，需要：
+  1. {步驟 1}
+  2. {步驟 2}
+
+---
+
+## 服務相依性分析
+
+（若有執行相依性分析才顯示此區塊）
+
+### 相依性圖
+
+```mermaid
+graph TD
+  {service1} --> {service2}
+```
+
+### 高風險相依性
+
+| 服務      | 依賴        | 風險               | 建議             |
+| --------- | ----------- | ------------------ | ---------------- |
+| {service} | {dependsOn} | {risk_description} | {recommendation} |
+
+### 建議的服務群組
+
+**群組 {n}: {群組名稱或主題}**
+
+- {service1}
+- {service2}
+
+應一起啟停，因為 {原因}。
+
+### 建議的啟停順序
+
+**啟動順序**: {service1} → {service2} → {service3} → ...
+**停止順序**: (反向)
 
 ---
 
@@ -207,7 +334,13 @@ options:
 
 ### 建議納入 Lights Out 管理的資源
 
-{列出 recommended 的資源和建議的 YAML 配置}
+#### A. 優先推薦（低風險）
+
+**ECS Services ({count} 個):**
+
+- {service1}
+- {service2}
+- ...
 
 **建議 Tags：**
 
@@ -216,9 +349,8 @@ lights-out:managed: 'true'
 lights-out:env: 'dev'
 lights-out:priority: '50'
 ```
-````
 
-**建議配置範例：**
+**建議 SSM 配置（config/{stage_name}.yml）：**
 
 ```yaml
 resource_defaults:
@@ -226,9 +358,9 @@ resource_defaults:
     waitForStable: true
     stableTimeoutSeconds: 300
     start:
-      minCapacity: { min }
-      maxCapacity: { max }
-      desiredCount: { desired }
+      minCapacity: 1 # 對於有 Auto Scaling 的 services
+      maxCapacity: 2
+      desiredCount: 1
     stop:
       minCapacity: 0
       maxCapacity: 0
@@ -236,47 +368,226 @@ resource_defaults:
 
   rds-db:
     waitAfterCommand: 60
-    skipSnapshot: true
+    skipSnapshot: true # 開發環境建議跳過 snapshot 以節省成本
+
+schedules:
+  - name: weekday-schedule
+    timezone: Asia/Taipei
+    stop_cron: '0 22 * * 1-5' # 週一到週五 22:00 停止
+    start_cron: '0 8 * * 1-5' # 週一到週五 08:00 啟動
+    holidays:
+      - '{year}-01-01' # 元旦
+      # 根據實際需求添加
 ```
+
+#### B. 需要注意（中等風險）
+
+**{service_name}:**
+
+- 建議先確認 {注意事項}
+- 如果確認可以停止，使用較低 priority：
+
+```yaml
+lights-out:managed: 'true'
+lights-out:env: 'dev'
+lights-out:priority: '100' # 較晚關閉，較早啟動
+```
+
+#### C. 高風險（需要評估）
+
+**{service_name}:**
+
+- **不建議納入 lights-out** 除非 {條件}
+- 替代方案：
+  - {替代方案 1}
+  - {替代方案 2}
+
+#### D. RDS 實例
+
+**{instance_id} (標準 RDS):**
+
+```bash
+aws rds add-tags-to-resource \
+  --resource-name arn:aws:rds:{region}:{account}:db:{instance_id} \
+  --tags Key=lights-out:managed,Value=true \
+         Key=lights-out:env,Value=dev \
+         Key=lights-out:priority,Value=100 \
+  --region {region} \
+  --profile {profile}
+```
+
+---
 
 ### 需要注意的資源
 
-{列出 caution 的資源和注意事項}
+**目前已停止的 services:**
+
+- {service1} (desired: 0)
+- {service2} (desired: 0)
+
+這些 service 目前已經是停止狀態，可以：
+
+- 選項 1：不納入 lights-out 管理（保持目前狀態）
+- 選項 2：如果未來需要定期啟停，再加上 tags
+
+---
 
 ### 不建議納入的資源
 
-{列出 not-recommended 的資源和原因}
+**{資源類型} ({count} 個):**
+
+- {resource1}
+- {resource2}
+
+**原因：**
+
+- {原因說明}
+
+**如果需要管理：**
+
+1. {步驟說明}
+2. {API 說明}
 
 ---
 
 ## 下一步
 
-1. 為建議的資源加上 Tags：
+### 1. 為建議的資源加上 Tags
 
-   ```bash
-   # ECS Service
-   aws ecs tag-resource \
-     --resource-arn {arn} \
-     --tags key=lights-out:managed,value=true \
-            key=lights-out:env,value=dev \
-            key=lights-out:priority,value=50
+**ECS Services（批次加 tags 腳本）：**
 
-   # RDS Instance
-   aws rds add-tags-to-resource \
-     --resource-name {arn} \
-     --tags Key=lights-out:managed,Value=true \
-            Key=lights-out:env,Value=dev \
-            Key=lights-out:priority,Value=100
-   ```
+```bash
+#!/bin/bash
 
-2. 更新 SSM Parameter Store 配置
+export AWS_PROFILE={profile}
+CLUSTER="{cluster_name}"
+REGION="{region}"
+ACCOUNT="{account_id}"
 
-3. 部署 Lights Out Lambda：
-   ```bash
-   pnpm deploy
-   ```
+# Low risk services (priority 50)
+services_p50="{service1} {service2} {service3}"
 
+for service in $services_p50; do
+  arn="arn:aws:ecs:$REGION:$ACCOUNT:service/$CLUSTER/$service"
+  echo "Tagging $service..."
+  aws ecs tag-resource \
+    --resource-arn "$arn" \
+    --tags key=lights-out:managed,value=true \
+           key=lights-out:env,value=dev \
+           key=lights-out:priority,value=50 \
+    --region $REGION
+done
+
+# Medium risk service (priority 100) - 需要先確認再執行
+# service="{medium_risk_service}"
+# arn="arn:aws:ecs:$REGION:$ACCOUNT:service/$CLUSTER/$service"
+# aws ecs tag-resource \
+#   --resource-arn "$arn" \
+#   --tags key=lights-out:managed,value=true \
+#          key=lights-out:env,value=dev \
+#          key=lights-out:priority,value=100 \
+#   --region $REGION
+
+echo "Done!"
 ```
+
+**RDS Instance：**
+
+```bash
+export AWS_PROFILE={profile}
+
+aws rds add-tags-to-resource \
+  --resource-name arn:aws:rds:{region}:{account}:db:{instance_id} \
+  --tags Key=lights-out:managed,Value=true \
+         Key=lights-out:env,Value=dev \
+         Key=lights-out:priority,Value=100 \
+  --region {region}
+```
+
+### 2. 建立 SSM Parameter Store 配置
+
+```bash
+# 建立配置檔案
+cp config/sss-lab.yml config/{stage_name}.yml
+
+# 編輯配置（參考上方建議配置）
+# 然後使用 run-interactive.js 部署時會自動上傳
+```
+
+### 3. 部署 Lights Out Lambda
+
+```bash
+cd {project_path}
+
+# 使用互動式部署
+pnpm deploy
+
+# 選擇或輸入 stage name: {stage_name}
+# 選擇 region: {region}
+```
+
+### 4. 測試
+
+```bash
+# 檢查資源探索
+aws lambda invoke \
+  --function-name lights-out-{stage_name} \
+  --payload '{"action":"discover"}' \
+  --region {region} \
+  --profile {profile} \
+  /tmp/discover-output.json && cat /tmp/discover-output.json | jq '.'
+
+# 檢查狀態
+aws lambda invoke \
+  --function-name lights-out-{stage_name} \
+  --payload '{"action":"status"}' \
+  --region {region} \
+  --profile {profile} \
+  /tmp/status-output.json && cat /tmp/status-output.json | jq '.'
+```
+
+---
+
+## 預期成本節省
+
+假設每日 lights-out 時間為 {hours} 小時，工作日為週一至週五：
+
+**ECS Services ({count} 個):**
+
+- Fargate vCPU 成本: ~${vcpu_cost} per vCPU-hour
+- 假設每個 service 平均 {avg_vcpu} vCPU
+- 每日節省: {count} services × {avg_vcpu} vCPU × {hours} hours × ${vcpu_cost} = ${daily_ecs}
+- 每月節省: ${daily_ecs} × {working_days} working days = **${monthly_ecs}\*\*
+
+**RDS Instance ({count} 個 {instance_class}):**
+
+- {instance_class} 成本: ~${hourly_cost} per hour
+- 每日節省: {hours} hours × ${hourly_cost} = ${daily_rds}
+- 每月節省: ${daily_rds} × {working_days} working days = **${monthly_rds}\*\*
+
+**總計每月節省: ~${total_monthly}**
+
+**注意：**
+
+- 如果 Aurora Cluster 也能納入管理，預期可再節省更多
+- 實際節省會依據運算資源配置和使用時間有所不同
+
+---
+
+## 附錄：資源清單
+
+### ECS Services 完整列表
+
+| Service Name | Desired   | Running   | Auto Scaling      | Task Definition |
+| ------------ | --------- | --------- | ----------------- | --------------- |
+| {service}    | {desired} | {running} | {min}-{max} 或 ❌ | :{revision}     |
+
+### RDS Instances 完整列表
+
+| Instance ID   | Engine   | Class   | Status   | Type   |
+| ------------- | -------- | ------- | -------- | ------ |
+| {instance_id} | {engine} | {class} | {status} | {type} |
+````
 
 ---
 
@@ -307,9 +618,11 @@ options:
 ```
 
 **如果使用者選擇儲存：**
+
 1. 如果目標目錄不存在，先建立目錄（使用 Bash 的 `mkdir -p`）
 2. 使用 Write 工具將報告內容寫入檔案
 3. 顯示確認訊息：
+
 ```
 
 報告已儲存至：{file_path}
@@ -323,29 +636,35 @@ options:
 ### ECS Service 分析規則
 
 1. **Lights Out 支援判定：**
+
 - `supported`: 可安全啟停
 - `caution`: 需要注意（有 scheduler/webhook 容器，或 Task Definition 風險等級為 medium/high）
 - `not-supported`: 名稱包含 production 關鍵字
 
 2. **風險等級判定（基於 Task Definition）：**
+
 - `high`: 包含 scheduler、webhook 容器，或 stopTimeout 設定過長
 - `medium`: 包含 worker 容器
 - `low`: 標準 API/UI 服務
 
 3. **Production 關鍵字檢測：**
+
 - 檢查 service name 和 cluster name 是否包含：`prod`, `production`, `live`, `prd`
 
 4. **Dev/Test 關鍵字檢測：**
+
 - 檢查是否包含：`dev`, `development`, `test`, `staging`, `sandbox`, `qa`, `demo`, `poc`
 
 ### RDS Instance 分析規則
 
 1. **Lights Out 支援判定（使用 configAnalysis.supportLevel）：**
+
 - `supported`: 標準 RDS instance，可直接啟停
 - `cluster-managed`: Aurora Cluster 成員，需透過 cluster 管理
 - `not-supported`: Read Replica 或 Aurora Serverless v1
 
 2. **特殊配置檢測：**
+
 - Aurora Cluster 成員：檢查 `isAuroraClusterMember`
 - Read Replica：檢查 `isReadReplica`
 - Aurora Serverless：檢查 `isAuroraServerless`
@@ -357,13 +676,15 @@ options:
 
 此命令使用 `lights-out-discovery` MCP Server 提供的以下 tools：
 
-| Tool | 用途 |
-|------|------|
-| `verify_credentials` | 驗證 AWS 認證 |
-| `list_available_regions` | 取得按地區分組的 AWS regions 列表 |
-| `scan_iac_directory` | 掃描 IaC 目錄，找出資源定義 |
-| `discover_ecs_services` | 探索 ECS Services |
-| `discover_rds_instances` | 探索 RDS Instances |
+| Tool                     | 用途                                   |
+| ------------------------ | -------------------------------------- |
+| `verify_credentials`     | 驗證 AWS 認證                          |
+| `list_available_regions` | 取得按地區分組的 AWS regions 列表      |
+| `scan_iac_directory`     | 掃描 IaC 目錄，找出資源定義和相依性    |
+| `scan_backend_project`   | 掃描後端專案，分析 HTTP 呼叫和環境變數 |
+| `discover_ecs_services`  | 探索 ECS Services，包含環境變數分析    |
+| `discover_rds_instances` | 探索 RDS Instances                     |
+| `analyze_dependencies`   | 整合相依性分析，產出風險評估和啟停順序 |
 
 ---
 
@@ -376,4 +697,7 @@ options:
 - `application-autoscaling:DescribeScalableTargets`
 - `sts:GetCallerIdentity`
 - 如果帳號中資源較多，探索過程可能需要一些時間
+
+```
+
 ```

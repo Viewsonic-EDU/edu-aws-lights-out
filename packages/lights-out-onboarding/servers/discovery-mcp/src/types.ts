@@ -50,6 +50,32 @@ export type ContainerRole =
 export type RiskLevel = 'low' | 'medium' | 'high';
 
 /**
+ * Environment variable from container definition
+ */
+export interface EnvironmentVariable {
+  name: string;
+  value?: string;
+  /** Whether this is from secrets (SSM/Secrets Manager) */
+  isSecret: boolean;
+  /** Source ARN for secrets */
+  secretArn?: string;
+}
+
+/**
+ * Inferred service URL reference from environment variables
+ */
+export interface ServiceUrlReference {
+  /** Environment variable name (e.g., "AUTH_SERVICE_URL") */
+  envVarName: string;
+  /** Value if available (e.g., "http://vs-auth-dev.internal") */
+  value?: string;
+  /** Inferred target service name */
+  targetService?: string;
+  /** Confidence level of the inference */
+  confidence: 'high' | 'medium' | 'low';
+}
+
+/**
  * Container information from Task Definition
  */
 export interface ContainerInfo {
@@ -62,6 +88,10 @@ export interface ContainerInfo {
   role: ContainerRole;
   riskLevel: RiskLevel;
   riskReasons: string[];
+  /** Environment variables (for dependency analysis) */
+  environment?: EnvironmentVariable[];
+  /** Inferred service URL references */
+  serviceUrls?: ServiceUrlReference[];
 }
 
 /**
@@ -234,7 +264,13 @@ export type IacType = 'terraform' | 'terragrunt' | 'cloudformation';
 /**
  * IaC resource category
  */
-export type IacResourceCategory = 'ecs' | 'rds' | 'autoscaling';
+export type IacResourceCategory =
+  | 'ecs'
+  | 'rds'
+  | 'autoscaling'
+  | 'security_group'
+  | 'service_discovery'
+  | 'load_balancer';
 
 /**
  * Information about a discovered IaC file
@@ -264,6 +300,30 @@ export interface IacResourceDefinition {
   lineNumber: number;
   /** Code snippet around the resource definition */
   snippet?: string;
+  /** Resource name (e.g., "main", "api") - Terraform resource name or CloudFormation logical ID */
+  resourceName?: string;
+  /** References to other resources (e.g., "aws_rds_cluster.db.endpoint") */
+  references?: string[];
+  /** Explicit depends_on declarations */
+  dependsOn?: string[];
+  /** Security group references */
+  securityGroups?: string[];
+}
+
+/**
+ * A dependency edge between two resources
+ */
+export interface DependencyEdge {
+  /** Source resource identifier */
+  from: string;
+  /** Target resource identifier */
+  to: string;
+  /** Type of dependency */
+  type: 'depends_on' | 'reference' | 'security_group' | 'env_var' | 'code_analysis';
+  /** Confidence level */
+  confidence: 'high' | 'medium' | 'low';
+  /** Evidence for this dependency (file:line or description) */
+  evidence?: string;
 }
 
 /**
@@ -284,6 +344,14 @@ export interface IacScanSummary {
   rdsResources: number;
   /** Number of Auto Scaling resource definitions */
   autoscalingResources: number;
+  /** Number of Security Group resource definitions */
+  securityGroupResources: number;
+  /** Number of Service Discovery resource definitions */
+  serviceDiscoveryResources: number;
+  /** Number of Load Balancer resource definitions */
+  loadBalancerResources: number;
+  /** Number of dependency edges discovered */
+  dependencyEdges: number;
 }
 
 /**
@@ -302,6 +370,8 @@ export interface IacScanResult {
   resources: IacResourceDefinition[];
   /** Summary statistics */
   summary: IacScanSummary;
+  /** Dependency graph edges discovered from IaC */
+  dependencyGraph?: DependencyEdge[];
 }
 
 // Input schema for IaC scanning
@@ -315,3 +385,170 @@ export const ScanIacDirectoryInputSchema = z.object({
 });
 
 export type ScanIacDirectoryInput = z.infer<typeof ScanIacDirectoryInputSchema>;
+
+// ============================================================================
+// Backend Project Analysis Types
+// ============================================================================
+
+/**
+ * Detected programming language
+ */
+export type ProjectLanguage = 'typescript' | 'javascript' | 'python' | 'go' | 'unknown';
+
+/**
+ * HTTP call reference found in code
+ */
+export interface HttpCallReference {
+  /** File where the call was found */
+  file: string;
+  /** Line number */
+  lineNumber: number;
+  /** HTTP method if detected */
+  method?: 'GET' | 'POST' | 'PUT' | 'DELETE' | 'PATCH' | 'unknown';
+  /** URL or URL pattern */
+  url: string;
+  /** Whether URL contains environment variable */
+  usesEnvVar: boolean;
+  /** Environment variable name if used */
+  envVarName?: string;
+}
+
+/**
+ * Environment variable usage found in code
+ */
+export interface EnvVarUsage {
+  /** Environment variable name */
+  name: string;
+  /** File where it's used */
+  file: string;
+  /** Line number */
+  lineNumber: number;
+  /** Whether this looks like a service URL */
+  isServiceUrl: boolean;
+}
+
+/**
+ * Inferred dependency from code analysis
+ */
+export interface InferredDependency {
+  /** Source service/project name */
+  source: string;
+  /** Target service name */
+  target: string;
+  /** Confidence level */
+  confidence: 'high' | 'medium' | 'low';
+  /** Evidence for this dependency */
+  evidence: string[];
+}
+
+/**
+ * Result of scanning a backend project
+ */
+export interface BackendProjectAnalysis {
+  /** Whether the scan was successful */
+  success: boolean;
+  /** Error message if scan failed */
+  error?: string;
+  /** Directory that was scanned */
+  directory: string;
+  /** Detected programming language */
+  language: ProjectLanguage;
+  /** HTTP call references found */
+  httpCalls: HttpCallReference[];
+  /** Environment variable usages found */
+  envVarUsages: EnvVarUsage[];
+  /** Inferred service dependencies */
+  inferredDependencies: InferredDependency[];
+  /** Summary statistics */
+  summary: {
+    totalFiles: number;
+    filesWithHttpCalls: number;
+    uniqueEnvVars: number;
+    inferredDependencies: number;
+  };
+}
+
+// Input schema for backend project scanning
+export const ScanBackendProjectInputSchema = z.object({
+  directory: z.string().describe('後端專案的目錄路徑'),
+  serviceName: z.string().optional().describe('此專案對應的服務名稱（可選）'),
+});
+
+export type ScanBackendProjectInput = z.infer<typeof ScanBackendProjectInputSchema>;
+
+// ============================================================================
+// Dependency Analysis Types
+// ============================================================================
+
+/**
+ * Service node in dependency graph
+ */
+export interface ServiceNode {
+  /** Service name/identifier */
+  name: string;
+  /** Source of information */
+  source: 'ecs' | 'iac' | 'code';
+  /** Risk level if available */
+  riskLevel?: RiskLevel;
+  /** Whether it has Lights Out tags */
+  hasLightsOutTags?: boolean;
+}
+
+/**
+ * Risk analysis for dependencies
+ */
+export interface DependencyRiskItem {
+  /** Service name */
+  service: string;
+  /** Service it depends on */
+  dependsOn: string;
+  /** Risk description */
+  risk: string;
+  /** Recommendation */
+  recommendation: string;
+}
+
+/**
+ * Group of services that should be managed together
+ */
+export interface ServiceGroup {
+  /** Services in this group */
+  services: string[];
+  /** Reason for grouping */
+  reason: string;
+}
+
+/**
+ * Complete dependency risk analysis
+ */
+export interface DependencyRiskAnalysis {
+  /** High risk dependencies */
+  highRiskDependencies: DependencyRiskItem[];
+  /** Service groups that should be managed together */
+  serviceGroups: ServiceGroup[];
+  /** Recommended shutdown order */
+  shutdownOrder: string[];
+  /** Recommended startup order */
+  startupOrder: string[];
+}
+
+/**
+ * Result of dependency analysis
+ */
+export interface DependencyAnalysisResult {
+  /** Service nodes */
+  services: ServiceNode[];
+  /** Dependency edges */
+  edges: DependencyEdge[];
+  /** Risk analysis */
+  riskAnalysis: DependencyRiskAnalysis;
+}
+
+// Input schema for dependency analysis
+export const AnalyzeDependenciesInputSchema = z.object({
+  ecsServices: z.array(z.any()).optional().describe('ECS services from discover_ecs_services'),
+  iacScanResult: z.any().optional().describe('Result from scan_iac_directory'),
+  backendAnalysis: z.array(z.any()).optional().describe('Results from scan_backend_project'),
+});
+
+export type AnalyzeDependenciesInput = z.infer<typeof AnalyzeDependenciesInputSchema>;
