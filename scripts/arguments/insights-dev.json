@@ -1,0 +1,12 @@
+{
+  "scope": "project",
+  "region": "us-east-1",
+  "stage": "pg-development-insights-dev",
+  "profile": "pg-development",
+  "function-name": "lights-out-pg-development-insights-dev",
+  "config": {
+    "name": "/lights-out/pg-development-insights-dev/config",
+    "path": "config/pg-development/insights-dev.yml",
+    "description": "Lights Out configuration for insights-dev project"
+  }
+}
