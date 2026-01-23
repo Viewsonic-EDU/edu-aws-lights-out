@@ -79,6 +79,7 @@ custom:
     pg-development-airsync-dev: pg-development/airsync-dev.yml
     pg-development-insights-dev: pg-development/insights-dev.yml
     pg-stage-airsync-stage: pg-stage/airsync-stage.yml
+    pg-stage-insights-stage: pg-stage/insights-stage.yml
     sss-lab: sss-lab.yml
 
 plugins:
