@@ -1,0 +1,38 @@
+version: '1.0'
+environment: pg-development-insights-dev
+regions:
+  - us-east-1
+notifications:
+  teams:
+    enabled: true
+    webhook_url: >-
+      https://defaultf7a082108cd2459f9459ddb19785f3.76.environment.api.powerplatform.com:443/powerautomate/automations/direct/workflows/8ea44872979242c296d93131f8b91359/triggers/manual/paths/invoke?api-version=1&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=pNFa485yGDQBiJHGuBXi0WxD5TaDAFQCnD-wqDLH9hQ
+    description: Power Automate Workflow for Notifications to Insights App Development.
+discovery:
+  method: tags
+  tags:
+    lights-out:managed: 'true'
+    lights-out:project: insights-dev
+  resource_types:
+    - ecs:service
+resource_defaults:
+  ecs-service:
+    waitForStable: true
+    stableTimeoutSeconds: 300
+    start:
+      desiredCount: 1
+    stop:
+      desiredCount: 0
+schedules:
+  default:
+    timezone: Asia/Taipei
+    startTime: '08:00'
+    stopTime: '19:00'
+    enabled: true
+    activeDays:
+      - MON
+      - TUE
+      - WED
+      - THU
+      - FRI
+    holidays: []
