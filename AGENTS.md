@@ -379,7 +379,7 @@ AI Agents **必須遵守** 以下執行限制：
 - ✅ Git 操作（status、diff、commit）
 - ✅ 文件生成與更新
 - ✅ 測試執行（pnpm test 系列指令）
-- ✅ 型別檢查（pnpm type-check）
+- ✅ 型別檢查（pnpm type:check）
 
 ### 依賴管理策略 (Dependency Management)
 

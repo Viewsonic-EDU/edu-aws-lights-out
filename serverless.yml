@@ -88,6 +88,24 @@ functions:
           method: post
           cors: false
 
+  power-automate-webhook:
+    name: lights-out-${self:provider.stage}-power-automate-webhook
+    handler: src/functions/power-automate-webhook/index.main
+    runtime: nodejs24.x
+    timeout: 30
+    memorySize: 256
+    tags:
+      project: lights-out
+      managed-by: serverless
+    environment:
+      MAIN_HANDLER_FUNCTION_NAME: lights-out-${self:provider.stage}
+      STAGE: ${self:provider.stage}
+    events:
+      - http:
+          path: webhook/power-automate
+          method: post
+          cors: false
+
 custom:
   esbuild:
     bundle: true

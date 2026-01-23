@@ -80,10 +80,15 @@ const MODES = {
         title: '🔑 Upload Teams Webhook Token - Upload Teams webhook security token',
         value: 'upload-token',
       },
+      {
+        title: '🔐 Generate Power Automate API Key - Generate and upload API key for Power Automate webhook',
+        value: 'generate-pa-key',
+      },
     ],
     scriptMap: {
       upload: 'deploy-config',
       'upload-token': 'upload-teams-webhook-token',
+      'generate-pa-key': 'generate-power-automate-key',
       retrieve: 'get-ssm-config',
     },
     promptForToken: true, // Flag to indicate this mode needs token input
