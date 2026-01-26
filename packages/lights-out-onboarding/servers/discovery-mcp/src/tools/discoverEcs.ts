@@ -419,8 +419,12 @@ async function analyzeTaskDefinition(
       riskSummary,
       recommendations,
     };
-  } catch {
-    // Unable to fetch task definition
+  } catch (error) {
+    // Log the error for debugging
+    console.error(
+      `[discoverEcs] Failed to analyze task definition: ${taskDefinitionArn}`,
+      error instanceof Error ? error.message : error
+    );
     return undefined;
   }
 }
@@ -487,9 +491,21 @@ async function discoverInRegion(region: string): Promise<EcsServiceInfo[]> {
             );
 
             // Analyze Task Definition
-            const taskDefinition = service.taskDefinition
-              ? await analyzeTaskDefinition(ecsClient, service.taskDefinition)
-              : undefined;
+            let taskDefinition: TaskDefinitionAnalysis | undefined;
+            if (service.taskDefinition) {
+              // Add small delay to avoid API rate limiting
+              await new Promise((resolve) => setTimeout(resolve, 100));
+              taskDefinition = await analyzeTaskDefinition(ecsClient, service.taskDefinition);
+              if (!taskDefinition) {
+                console.warn(
+                  `[discoverEcs] Task definition analysis returned undefined for ${service.serviceName}: ${service.taskDefinition}`
+                );
+              }
+            } else {
+              console.warn(
+                `[discoverEcs] No task definition ARN found for service: ${service.serviceName}`
+              );
+            }
 
             const hasLightsOutTags = tags[LIGHTS_OUT_TAG_KEY] === 'true';
 
@@ -535,8 +551,12 @@ async function getServiceTags(
       }
     }
     return tags;
-  } catch {
-    // Return empty tags if unable to fetch
+  } catch (error) {
+    // Log error and return empty tags
+    console.warn(
+      `[discoverEcs] Failed to fetch tags for: ${resourceArn}`,
+      error instanceof Error ? error.message : error
+    );
     return {};
   }
 }
@@ -567,8 +587,16 @@ async function getAutoScalingConfig(
       };
     }
     return undefined;
-  } catch {
-    // No Auto Scaling configured or unable to fetch
+  } catch (error) {
+    // No Auto Scaling configured is a normal case (not an error)
+    // Only log unexpected errors
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    if (!errorMessage.includes('TargetNotFound') && !errorMessage.includes('ObjectNotFound')) {
+      console.warn(
+        `[discoverEcs] Failed to fetch Auto Scaling config for ${clusterName}/${serviceName}:`,
+        errorMessage
+      );
+    }
     return undefined;
   }
 }
