@@ -7,3 +7,10 @@ export { discoverEcsServices } from './discoverEcs.js';
 export { discoverRdsInstances } from './discoverRds.js';
 export { listAvailableRegions } from './listRegions.js';
 export { scanIacDirectory } from './scanIacDirectory.js';
+
+// Apply Tags tools
+export { listDiscoveryReports } from './listDiscoveryReports.js';
+export { parseDiscoveryReport } from './parseDiscoveryReport.js';
+export { applyTagsViaApi } from './applyTagsViaApi.js';
+export { verifyTags } from './verifyTags.js';
+export { generateIacTagPatch } from './generateIacTagPatch.js';

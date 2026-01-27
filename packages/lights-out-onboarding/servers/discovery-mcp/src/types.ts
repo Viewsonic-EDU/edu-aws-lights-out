@@ -552,3 +552,302 @@ export const AnalyzeDependenciesInputSchema = z.object({
 });
 
 export type AnalyzeDependenciesInput = z.infer<typeof AnalyzeDependenciesInputSchema>;
+
+// ============================================================================
+// Apply Tags Types
+// ============================================================================
+
+/**
+ * Information about a discovery report file
+ */
+export interface DiscoveryReportInfo {
+  /** Absolute path to the report file */
+  path: string;
+  /** AWS account ID extracted from directory name */
+  accountId: string;
+  /** Report date extracted from filename (YYYYMMDD) */
+  date: string;
+  /** File name */
+  fileName: string;
+  /** File size in bytes */
+  size: number;
+  /** Last modified time */
+  modifiedAt: string;
+}
+
+/**
+ * Result of listing discovery reports
+ */
+export interface ListDiscoveryReportsResult {
+  success: boolean;
+  error?: string;
+  reports: DiscoveryReportInfo[];
+  summary: {
+    totalReports: number;
+    accounts: string[];
+  };
+}
+
+/**
+ * Lights Out tags to apply
+ */
+export interface LightsOutTags {
+  /** Whether the resource is managed by Lights Out */
+  'lights-out:managed': 'true' | 'false';
+  /** Project name (extracted from common service name prefix) */
+  'lights-out:project': string;
+  /** Priority for startup/shutdown order (lower = earlier) */
+  'lights-out:priority': string;
+}
+
+/**
+ * Resource classification for tag application
+ */
+export type ResourceClassification = 'autoApply' | 'needConfirmation' | 'excluded';
+
+/**
+ * ECS resource extracted from report
+ */
+export interface ParsedEcsResource {
+  region: string;
+  cluster: string;
+  serviceName: string;
+  arn: string;
+  status: string;
+  hasAutoScaling: boolean;
+  autoScalingRange?: string;
+  riskLevel: RiskLevel;
+  lightsOutSupport: 'supported' | 'caution' | 'not-supported';
+  classification: ResourceClassification;
+  classificationReason: string;
+  suggestedTags: LightsOutTags;
+}
+
+/**
+ * RDS resource extracted from report
+ */
+export interface ParsedRdsResource {
+  region: string;
+  instanceId: string;
+  arn: string;
+  engine: string;
+  status: string;
+  instanceType: string;
+  lightsOutSupport: 'supported' | 'cluster-managed' | 'not-supported';
+  classification: ResourceClassification;
+  classificationReason: string;
+  suggestedTags?: LightsOutTags;
+}
+
+/**
+ * Result of parsing a discovery report
+ */
+export interface ParseDiscoveryReportResult {
+  success: boolean;
+  error?: string;
+  reportPath: string;
+  accountId: string;
+  regions: string[];
+  /** Detected project name from common service name prefix */
+  detectedProject: string;
+  ecsResources: ParsedEcsResource[];
+  rdsResources: ParsedRdsResource[];
+  summary: {
+    totalEcs: number;
+    totalRds: number;
+    autoApply: number;
+    needConfirmation: number;
+    excluded: number;
+  };
+  categorized: {
+    autoApply: (ParsedEcsResource | ParsedRdsResource)[];
+    needConfirmation: (ParsedEcsResource | ParsedRdsResource)[];
+    excluded: (ParsedEcsResource | ParsedRdsResource)[];
+  };
+}
+
+/**
+ * Resource to apply tags to
+ */
+export interface ResourceToTag {
+  /** Resource ARN */
+  arn: string;
+  /** Resource type */
+  type: 'ecs-service' | 'rds-db';
+  /** Tags to apply */
+  tags: LightsOutTags;
+}
+
+/**
+ * Result of applying tags to a single resource
+ */
+export interface TagApplicationResult {
+  arn: string;
+  type: 'ecs-service' | 'rds-db';
+  status: 'success' | 'failed' | 'skipped';
+  error?: string;
+  appliedTags?: LightsOutTags;
+}
+
+/**
+ * Result of applying tags via API
+ */
+export interface ApplyTagsResult {
+  success: boolean;
+  dryRun: boolean;
+  results: TagApplicationResult[];
+  summary: {
+    total: number;
+    succeeded: number;
+    failed: number;
+    skipped: number;
+  };
+}
+
+/**
+ * Result of verifying tags on a single resource
+ */
+export interface TagVerificationResult {
+  arn: string;
+  type: 'ecs-service' | 'rds-db';
+  status: 'verified' | 'mismatch' | 'not-found' | 'error';
+  expectedTags: LightsOutTags;
+  actualTags?: Record<string, string>;
+  mismatches?: string[];
+  error?: string;
+}
+
+/**
+ * Result of verifying tags
+ */
+export interface VerifyTagsResult {
+  success: boolean;
+  results: TagVerificationResult[];
+  summary: {
+    total: number;
+    verified: number;
+    mismatch: number;
+    notFound: number;
+    error: number;
+  };
+}
+
+/**
+ * IaC file modification suggestion
+ */
+export interface IacTagPatch {
+  /** Path to the IaC file */
+  filePath: string;
+  /** IaC type */
+  iacType: 'terraform' | 'cloudformation' | 'serverless';
+  /** Resource identifier in the file */
+  resourceIdentifier: string;
+  /** Current tags (if any) */
+  currentTags?: Record<string, string>;
+  /** Suggested tags to add/modify */
+  suggestedTags: LightsOutTags;
+  /** Line number where tags should be added (approximate) */
+  lineNumber?: number;
+  /** Code snippet showing the modification */
+  patchSnippet?: string;
+  /** Human-readable instructions */
+  instructions: string;
+}
+
+/**
+ * Result of generating IaC tag patches
+ */
+export interface GenerateIacTagPatchResult {
+  success: boolean;
+  error?: string;
+  iacDirectory: string;
+  patches: IacTagPatch[];
+  summary: {
+    totalPatches: number;
+    terraform: number;
+    cloudformation: number;
+    serverless: number;
+    notFound: number;
+  };
+  notFoundResources: string[];
+}
+
+// Input schemas for new tools
+
+export const ListDiscoveryReportsInputSchema = z.object({
+  accountId: z.string().optional().describe('Filter by AWS account ID (optional)'),
+  directory: z
+    .string()
+    .optional()
+    .describe('Custom reports directory (optional, defaults to ./reports)'),
+});
+
+export const ParseDiscoveryReportInputSchema = z.object({
+  reportPath: z.string().describe('Path to the discovery report file'),
+});
+
+export const ApplyTagsViaApiInputSchema = z.object({
+  resources: z
+    .array(
+      z.object({
+        arn: z.string(),
+        type: z.enum(['ecs-service', 'rds-db']),
+        tags: z.object({
+          'lights-out:managed': z.enum(['true', 'false']),
+          'lights-out:project': z.string(),
+          'lights-out:priority': z.string(),
+        }),
+      })
+    )
+    .min(1)
+    .describe('Resources to tag'),
+  dryRun: z.boolean().optional().default(false).describe('Preview mode (no actual changes)'),
+  profile: z.string().optional().describe('AWS profile name (optional)'),
+});
+
+export const VerifyTagsInputSchema = z.object({
+  resources: z
+    .array(
+      z.object({
+        arn: z.string(),
+        type: z.enum(['ecs-service', 'rds-db']),
+        expectedTags: z.object({
+          'lights-out:managed': z.enum(['true', 'false']),
+          'lights-out:project': z.string(),
+          'lights-out:priority': z.string(),
+        }),
+      })
+    )
+    .min(1)
+    .describe('Resources to verify'),
+  profile: z.string().optional().describe('AWS profile name (optional)'),
+});
+
+export const GenerateIacTagPatchInputSchema = z.object({
+  iacDirectory: z.string().describe('Path to the IaC project directory'),
+  resources: z
+    .array(
+      z.object({
+        arn: z.string(),
+        type: z.enum(['ecs-service', 'rds-db']),
+        tags: z.object({
+          'lights-out:managed': z.enum(['true', 'false']),
+          'lights-out:project': z.string(),
+          'lights-out:priority': z.string(),
+        }),
+      })
+    )
+    .min(1)
+    .describe('Resources to generate patches for'),
+  outputFormat: z
+    .enum(['patch', 'instructions'])
+    .optional()
+    .default('instructions')
+    .describe('Output format'),
+});
+
+export type ListDiscoveryReportsInput = z.infer<typeof ListDiscoveryReportsInputSchema>;
+export type ParseDiscoveryReportInput = z.infer<typeof ParseDiscoveryReportInputSchema>;
+export type ApplyTagsViaApiInput = z.infer<typeof ApplyTagsViaApiInputSchema>;
+export type VerifyTagsInput = z.infer<typeof VerifyTagsInputSchema>;
+export type GenerateIacTagPatchInput = z.infer<typeof GenerateIacTagPatchInputSchema>;

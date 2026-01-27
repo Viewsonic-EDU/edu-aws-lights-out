@@ -21,6 +21,11 @@ import { listAvailableRegions } from './tools/listRegions.js';
 import { scanIacDirectory } from './tools/scanIacDirectory.js';
 import { scanBackendProject } from './tools/scanBackendProject.js';
 import { analyzeDependencies } from './tools/analyzeDependencies.js';
+import { listDiscoveryReports } from './tools/listDiscoveryReports.js';
+import { parseDiscoveryReport } from './tools/parseDiscoveryReport.js';
+import { applyTagsViaApi } from './tools/applyTagsViaApi.js';
+import { verifyTags } from './tools/verifyTags.js';
+import { generateIacTagPatch } from './tools/generateIacTagPatch.js';
 import {
   VerifyCredentialsInputSchema,
   DiscoverEcsInputSchema,
@@ -28,6 +33,11 @@ import {
   ScanIacDirectoryInputSchema,
   ScanBackendProjectInputSchema,
   AnalyzeDependenciesInputSchema,
+  ListDiscoveryReportsInputSchema,
+  ParseDiscoveryReportInputSchema,
+  ApplyTagsViaApiInputSchema,
+  VerifyTagsInputSchema,
+  GenerateIacTagPatchInputSchema,
 } from './types.js';
 
 const server = new Server(
@@ -162,6 +172,150 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
           },
         },
       },
+      // Apply Tags tools
+      {
+        name: 'list_discovery_reports',
+        description:
+          'List available discovery reports from the reports directory, extracting account ID and date information',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            accountId: {
+              type: 'string',
+              description: 'Filter by AWS account ID (optional)',
+            },
+            directory: {
+              type: 'string',
+              description: 'Custom reports directory (optional, defaults to ./reports)',
+            },
+          },
+        },
+      },
+      {
+        name: 'parse_discovery_report',
+        description:
+          'Parse a discovery report markdown file and extract resources, classifying them into autoApply (low risk), needConfirmation (high risk), and excluded (not supported) categories',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            reportPath: {
+              type: 'string',
+              description: 'Path to the discovery report file',
+            },
+          },
+          required: ['reportPath'],
+        },
+      },
+      {
+        name: 'apply_tags_via_api',
+        description:
+          'Apply Lights Out tags to AWS resources (ECS services, RDS instances) via AWS SDK APIs. Supports dry-run mode for preview.',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            resources: {
+              type: 'array',
+              description: 'Resources to tag (ARN, type, tags)',
+              items: {
+                type: 'object',
+                properties: {
+                  arn: { type: 'string' },
+                  type: { type: 'string', enum: ['ecs-service', 'rds-db'] },
+                  tags: {
+                    type: 'object',
+                    properties: {
+                      'lights-out:managed': { type: 'string' },
+                      'lights-out:project': { type: 'string' },
+                      'lights-out:priority': { type: 'string' },
+                    },
+                  },
+                },
+              },
+            },
+            dryRun: {
+              type: 'boolean',
+              description: 'Preview mode - no actual changes (default: false)',
+            },
+            profile: {
+              type: 'string',
+              description: 'AWS profile name (optional)',
+            },
+          },
+          required: ['resources'],
+        },
+      },
+      {
+        name: 'verify_tags',
+        description: 'Verify that Lights Out tags have been successfully applied to AWS resources',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            resources: {
+              type: 'array',
+              description: 'Resources to verify (ARN, type, expectedTags)',
+              items: {
+                type: 'object',
+                properties: {
+                  arn: { type: 'string' },
+                  type: { type: 'string', enum: ['ecs-service', 'rds-db'] },
+                  expectedTags: {
+                    type: 'object',
+                    properties: {
+                      'lights-out:managed': { type: 'string' },
+                      'lights-out:project': { type: 'string' },
+                      'lights-out:priority': { type: 'string' },
+                    },
+                  },
+                },
+              },
+            },
+            profile: {
+              type: 'string',
+              description: 'AWS profile name (optional)',
+            },
+          },
+          required: ['resources'],
+        },
+      },
+      {
+        name: 'generate_iac_tag_patch',
+        description:
+          'Generate IaC (Terraform, CloudFormation, Serverless) modification suggestions for adding Lights Out tags to resources',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            iacDirectory: {
+              type: 'string',
+              description: 'Path to the IaC project directory',
+            },
+            resources: {
+              type: 'array',
+              description: 'Resources to generate patches for',
+              items: {
+                type: 'object',
+                properties: {
+                  arn: { type: 'string' },
+                  type: { type: 'string', enum: ['ecs-service', 'rds-db'] },
+                  tags: {
+                    type: 'object',
+                    properties: {
+                      'lights-out:managed': { type: 'string' },
+                      'lights-out:project': { type: 'string' },
+                      'lights-out:priority': { type: 'string' },
+                    },
+                  },
+                },
+              },
+            },
+            outputFormat: {
+              type: 'string',
+              enum: ['patch', 'instructions'],
+              description: 'Output format (default: instructions)',
+            },
+          },
+          required: ['iacDirectory', 'resources'],
+        },
+      },
     ],
   };
 });
@@ -252,6 +406,72 @@ server.setRequestHandler(CallToolRequestSchema, async (request): Promise<CallToo
       case 'analyze_dependencies': {
         const input = AnalyzeDependenciesInputSchema.parse(args);
         const result = await analyzeDependencies(input);
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+        };
+      }
+
+      // Apply Tags tools
+      case 'list_discovery_reports': {
+        const input = ListDiscoveryReportsInputSchema.parse(args);
+        const result = await listDiscoveryReports(input);
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'parse_discovery_report': {
+        const input = ParseDiscoveryReportInputSchema.parse(args);
+        const result = await parseDiscoveryReport(input);
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'apply_tags_via_api': {
+        const input = ApplyTagsViaApiInputSchema.parse(args);
+        const result = await applyTagsViaApi(input);
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'verify_tags': {
+        const input = VerifyTagsInputSchema.parse(args);
+        const result = await verifyTags(input);
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'generate_iac_tag_patch': {
+        const input = GenerateIacTagPatchInputSchema.parse(args);
+        const result = await generateIacTagPatch(input);
         return {
           content: [
             {
