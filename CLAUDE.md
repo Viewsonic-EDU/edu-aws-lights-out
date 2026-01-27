@@ -63,14 +63,14 @@ lights-out:priority = 100    # 數字越小越優先（啟動先/關閉後）
 
 ## AI Agent Rules
 
-**CRITICAL - DO NOT AUTO-EXECUTE:**
+**CRITICAL - Execution Policy:**
 
-- ❌ **NEVER** 自動執行 `npm test` 或任何測試指令
-- ❌ **NEVER** 自動執行 `npm run deploy`
-- ❌ **NEVER** 自動執行 `aws lambda invoke`
-- ✅ **ALWAYS** 僅提供指令，由開發者確認後在終端中執行
+- ✅ **CAN** 自動執行 `pnpm test` 或測試指令（已授權）
+- ❌ **NEVER** 自動執行 `pnpm deploy` 或部署指令
+- ❌ **NEVER** 自動執行 `aws lambda invoke` 或直接呼叫 AWS 服務
+- ✅ **ALWAYS** 在部署前提供指令說明，由開發者確認後執行
 
-**Why:** 避免意外執行測試或部署影響 AWS 資源狀態。
+**Why:** 測試不會影響 AWS 資源；部署與 AWS 操作需要開發者明確授權。
 
 **CRITICAL - 依賴管理 (Dependency Management):**
 

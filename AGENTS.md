@@ -358,17 +358,19 @@ const config = yaml.parse(response.Parameter.Value);
 
 AI Agents **必須遵守** 以下執行限制：
 
-1. **禁止自動執行測試:**
-   - ❌ 不可自動執行 `pnpm test`、`vitest run` 等測試指令
-   - ✅ 應提供測試指令，讓開發者確認後執行
+1. **允許自動執行測試（2026-01-22 起）:**
+   - ✅ 可自動執行 `pnpm test`、`vitest run` 等測試指令
+   - ✅ 可執行 `pnpm test:watch`、`pnpm test:coverage`
+   - **理由:** 測試不會影響 AWS 資源狀態，且有助於開發流程
 
-2. **禁止自動執行主程式:**
-   - ❌ 不可自動執行 `pnpm deploy`、`aws lambda invoke` 等主程式
-   - ✅ 應提供執行指令，說明參數與預期結果
+2. **禁止自動執行部署與 AWS 操作:**
+   - ❌ 不可自動執行 `pnpm deploy`、`aws lambda invoke` 等指令
+   - ❌ 不可自動執行任何會修改 AWS 資源的操作
+   - ✅ 應提供執行指令，說明參數與預期結果，由開發者確認後執行
 
 3. **環境說明:**
-   - 避免意外執行測試或部署影響 AWS 資源狀態
-   - 型別檢查（`pnpm type-check`）可以執行，因為不會影響運行時
+   - 部署與 AWS 操作可能影響生產環境，需要開發者明確授權
+   - 測試與型別檢查不影響運行時，可自動執行
 
 **允許的操作:**
 
@@ -376,6 +378,8 @@ AI Agents **必須遵守** 以下執行限制：
 - ✅ 靜態程式碼分析（Grep、Glob）
 - ✅ Git 操作（status、diff、commit）
 - ✅ 文件生成與更新
+- ✅ 測試執行（pnpm test 系列指令）
+- ✅ 型別檢查（pnpm type-check）
 
 ### 依賴管理策略 (Dependency Management)
 

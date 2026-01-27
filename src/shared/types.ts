@@ -380,12 +380,32 @@ export type GroupSchedules = Record<string, GroupScheduleConfig>;
  * Configuration from SSM Parameter Store.
  */
 /**
+ * Teams Outgoing Webhook configuration.
+ * Defines settings for the Outgoing Webhook (bot commands).
+ */
+export interface TeamsOutgoingWebhookConfig {
+  /**
+   * Whether Outgoing Webhook is enabled.
+   */
+  enabled: boolean;
+
+  /**
+   * Allowlist of Teams display names who can execute commands.
+   * If empty or undefined, all users are allowed.
+   *
+   * @example ["John Doe", "Jane Smith"]
+   */
+  allowed_users?: string[];
+}
+
+/**
  * Teams notification configuration.
  */
 export interface TeamsNotificationConfig {
   enabled: boolean;
   webhook_url: string;
   description?: string; // Optional description for webhook (e.g., "Dev Team Channel", "Staging Alerts")
+  outgoing_webhook?: TeamsOutgoingWebhookConfig; // Outgoing Webhook settings (for bot commands)
 }
 
 /**
