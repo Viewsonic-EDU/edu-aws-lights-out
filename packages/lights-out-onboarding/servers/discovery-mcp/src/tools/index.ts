@@ -14,3 +14,6 @@ export { parseDiscoveryReport } from './parseDiscoveryReport.js';
 export { applyTagsViaApi } from './applyTagsViaApi.js';
 export { verifyTags } from './verifyTags.js';
 export { generateIacTagPatch } from './generateIacTagPatch.js';
+
+// IaC Plugin System
+export * from './iac-plugins/index.js';

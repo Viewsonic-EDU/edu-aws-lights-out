@@ -1,311 +1,242 @@
 /**
  * Generate IaC Tag Patch Tool
  *
- * Generates Infrastructure as Code (Terraform, CloudFormation, Serverless)
+ * Generates Infrastructure as Code (Terraform, CloudFormation, Serverless, Terragrunt)
  * modification suggestions for adding Lights Out tags.
+ *
+ * Uses a Plugin architecture for extensibility and AI Fallback for unknown IaC structures.
  */
 
 import * as fs from 'fs';
 import * as path from 'path';
 import type {
+  AiAnalysisContext,
+  DirectoryStructure,
   GenerateIacTagPatchInput,
-  GenerateIacTagPatchResult,
+  GenerateIacTagPatchResultWithAiFallback,
   IacTagPatch,
-  LightsOutTags,
   ResourceToTag,
+  SampleFile,
 } from '../types.js';
+import { globalRegistry } from './iac-plugins/index.js';
+
+// ============================================================================
+// AI Fallback Helpers
+// ============================================================================
 
 /**
- * Extract service name from ECS ARN
+ * Build directory structure tree for AI analysis
  */
-function extractServiceNameFromEcsArn(arn: string): string {
-  // arn:aws:ecs:region:account:service/cluster/service-name
-  const parts = arn.split('/');
-  return parts[parts.length - 1] || '';
-}
+function buildDirectoryStructure(
+  dir: string,
+  maxDepth: number = 4,
+  currentDepth: number = 0
+): DirectoryStructure {
+  const result: DirectoryStructure = {
+    path: dir,
+    isDirectory: true,
+    children: [],
+  };
 
-/**
- * Extract instance ID from RDS ARN
- */
-function extractInstanceIdFromRdsArn(arn: string): string {
-  // arn:aws:rds:region:account:db:instance-id
-  const parts = arn.split(':');
-  return parts[parts.length - 1] || '';
-}
+  if (currentDepth >= maxDepth) {
+    return result;
+  }
 
-/**
- * Generate Terraform tags block snippet
- */
-function generateTerraformTagsSnippet(tags: LightsOutTags, indent: string = '  '): string {
-  const lines = [
-    `${indent}tags = {`,
-    `${indent}  "lights-out:managed"  = "${tags['lights-out:managed']}"`,
-    `${indent}  "lights-out:project"  = "${tags['lights-out:project']}"`,
-    `${indent}  "lights-out:priority" = "${tags['lights-out:priority']}"`,
-    `${indent}}`,
-  ];
-  return lines.join('\n');
-}
-
-/**
- * Generate CloudFormation tags snippet (YAML)
- */
-function generateCloudFormationTagsSnippet(tags: LightsOutTags, indent: string = '      '): string {
-  const lines = [
-    `${indent}Tags:`,
-    `${indent}  - Key: "lights-out:managed"`,
-    `${indent}    Value: "${tags['lights-out:managed']}"`,
-    `${indent}  - Key: "lights-out:project"`,
-    `${indent}    Value: "${tags['lights-out:project']}"`,
-    `${indent}  - Key: "lights-out:priority"`,
-    `${indent}    Value: "${tags['lights-out:priority']}"`,
-  ];
-  return lines.join('\n');
-}
-
-/**
- * Generate Serverless Framework tags snippet
- */
-function generateServerlessTagsSnippet(tags: LightsOutTags, indent: string = '  '): string {
-  const lines = [
-    `${indent}tags:`,
-    `${indent}  "lights-out:managed": "${tags['lights-out:managed']}"`,
-    `${indent}  "lights-out:project": "${tags['lights-out:project']}"`,
-    `${indent}  "lights-out:priority": "${tags['lights-out:priority']}"`,
-  ];
-  return lines.join('\n');
-}
-
-/**
- * Scan directory for IaC files
- */
-function scanIacFiles(
-  directory: string
-): { path: string; type: 'terraform' | 'cloudformation' | 'serverless' }[] {
-  const files: { path: string; type: 'terraform' | 'cloudformation' | 'serverless' }[] = [];
-
-  function walk(dir: string) {
-    if (!fs.existsSync(dir)) return;
-
+  try {
     const entries = fs.readdirSync(dir, { withFileTypes: true });
 
     for (const entry of entries) {
-      const fullPath = path.join(dir, entry.name);
-
       // Skip common directories to avoid
       if (
         entry.isDirectory() &&
-        ['node_modules', '.git', '.terraform', 'dist', 'build'].includes(entry.name)
+        [
+          'node_modules',
+          '.git',
+          '.terraform',
+          '.terragrunt-cache',
+          'dist',
+          'build',
+          '__pycache__',
+        ].includes(entry.name)
       ) {
         continue;
       }
 
+      const fullPath = path.join(dir, entry.name);
+
       if (entry.isDirectory()) {
-        walk(fullPath);
-      } else if (entry.isFile()) {
-        // Terraform files
-        if (entry.name.endsWith('.tf')) {
-          files.push({ path: fullPath, type: 'terraform' });
-        }
-        // CloudFormation files
-        else if (
-          (entry.name.endsWith('.yaml') || entry.name.endsWith('.yml')) &&
-          !entry.name.includes('serverless')
+        result.children!.push(buildDirectoryStructure(fullPath, maxDepth, currentDepth + 1));
+      } else {
+        result.children!.push({
+          path: fullPath,
+          isDirectory: false,
+        });
+      }
+    }
+  } catch {
+    // Ignore permission errors
+  }
+
+  return result;
+}
+
+/**
+ * Collect sample files for AI analysis
+ */
+function collectSampleFiles(
+  directory: string,
+  maxFiles: number = 10,
+  maxContentLength: number = 2000
+): SampleFile[] {
+  const samples: SampleFile[] = [];
+  const relevantExtensions = ['.tf', '.hcl', '.yaml', '.yml', '.json', '.toml'];
+  const relevantNames = [
+    'terragrunt.hcl',
+    'terragrunt.stack.hcl',
+    'serverless.yml',
+    'serverless.yaml',
+    'main.tf',
+    'variables.tf',
+  ];
+
+  function walk(dir: string) {
+    if (samples.length >= maxFiles) return;
+
+    try {
+      const entries = fs.readdirSync(dir, { withFileTypes: true });
+
+      for (const entry of entries) {
+        if (samples.length >= maxFiles) return;
+
+        const fullPath = path.join(dir, entry.name);
+
+        // Skip common directories
+        if (
+          entry.isDirectory() &&
+          ['node_modules', '.git', '.terraform', '.terragrunt-cache', 'dist', 'build'].includes(
+            entry.name
+          )
         ) {
-          // Check if it's CloudFormation by content
-          const content = fs.readFileSync(fullPath, 'utf-8');
-          if (content.includes('AWSTemplateFormatVersion') || content.includes('AWS::')) {
-            files.push({ path: fullPath, type: 'cloudformation' });
+          continue;
+        }
+
+        if (entry.isDirectory()) {
+          walk(fullPath);
+        } else if (entry.isFile()) {
+          const ext = path.extname(entry.name).toLowerCase();
+          const isRelevant = relevantExtensions.includes(ext) || relevantNames.includes(entry.name);
+
+          if (isRelevant) {
+            try {
+              const content = fs.readFileSync(fullPath, 'utf-8');
+              const truncated = content.length > maxContentLength;
+
+              samples.push({
+                relativePath: path.relative(directory, fullPath),
+                content: truncated
+                  ? content.slice(0, maxContentLength) + '\n... (truncated)'
+                  : content,
+                truncated,
+                fileType: detectFileType(entry.name, content),
+              });
+            } catch {
+              // Ignore read errors
+            }
           }
         }
-        // Serverless Framework
-        else if (entry.name === 'serverless.yml' || entry.name === 'serverless.yaml') {
-          files.push({ path: fullPath, type: 'serverless' });
-        }
       }
+    } catch {
+      // Ignore directory read errors
     }
   }
 
   walk(directory);
-  return files;
+  return samples;
 }
 
 /**
- * Find Terraform resource for ECS service
+ * Detect file type based on name and content
  */
-function findTerraformEcsResource(
-  content: string,
-  serviceName: string
-): { found: boolean; lineNumber?: number; resourceName?: string } {
-  const lines = content.split('\n');
+function detectFileType(fileName: string, content: string): string {
+  if (fileName.endsWith('.tf')) return 'terraform';
+  if (fileName === 'terragrunt.hcl') return 'terragrunt';
+  if (fileName === 'terragrunt.stack.hcl') return 'terragrunt-stack';
+  if (fileName.endsWith('.hcl')) return 'hcl';
+  if (
+    fileName.includes('serverless') &&
+    (fileName.endsWith('.yml') || fileName.endsWith('.yaml'))
+  ) {
+    return 'serverless';
+  }
+  if (content.includes('AWSTemplateFormatVersion') || content.includes('AWS::')) {
+    return 'cloudformation';
+  }
+  if (fileName.endsWith('.yaml') || fileName.endsWith('.yml')) return 'yaml';
+  if (fileName.endsWith('.json')) return 'json';
+  return 'unknown';
+}
 
-  // Look for aws_ecs_service resources
-  const servicePattern = /resource\s+"aws_ecs_service"\s+"([^"]+)"/;
+/**
+ * Generate hints for AI analysis based on detected patterns
+ */
+function generateHints(directory: string, sampleFiles: SampleFile[]): string[] {
+  const hints: string[] = [];
 
-  for (let i = 0; i < lines.length; i++) {
-    const match = lines[i].match(servicePattern);
-    if (match) {
-      const resourceName = match[1];
-      // Check if this resource references the service name
-      // Look in the next ~30 lines for the name attribute
-      const searchRange = lines.slice(i, i + 30).join('\n');
-      if (searchRange.includes(serviceName) || resourceName.includes(serviceName)) {
-        return { found: true, lineNumber: i + 1, resourceName };
-      }
-    }
+  // Check for common patterns
+  const hasTerragrunt = sampleFiles.some((f) => f.fileType.includes('terragrunt'));
+  const hasTerraform = sampleFiles.some((f) => f.fileType === 'terraform');
+  const hasCloudFormation = sampleFiles.some((f) => f.fileType === 'cloudformation');
+  const hasServerless = sampleFiles.some((f) => f.fileType === 'serverless');
+
+  if (hasTerragrunt && hasTerraform) {
+    hints.push('This appears to be a Terragrunt project with underlying Terraform modules.');
+    hints.push(
+      'Tags may need to be added at multiple levels: module variables, unit values, or stack configuration.'
+    );
   }
 
-  return { found: false };
-}
-
-/**
- * Find Terraform resource for RDS instance
- */
-function findTerraformRdsResource(
-  content: string,
-  instanceId: string
-): { found: boolean; lineNumber?: number; resourceName?: string } {
-  const lines = content.split('\n');
-
-  // Look for aws_db_instance resources
-  const instancePattern = /resource\s+"aws_db_instance"\s+"([^"]+)"/;
-
-  for (let i = 0; i < lines.length; i++) {
-    const match = lines[i].match(instancePattern);
-    if (match) {
-      const resourceName = match[1];
-      const searchRange = lines.slice(i, i + 30).join('\n');
-      if (searchRange.includes(instanceId) || resourceName.includes(instanceId)) {
-        return { found: true, lineNumber: i + 1, resourceName };
-      }
-    }
+  if (hasServerless) {
+    hints.push('This uses Serverless Framework. Provider-level tags apply to all resources.');
   }
 
-  return { found: false };
-}
-
-/**
- * Find CloudFormation resource
- */
-function findCloudFormationResource(
-  content: string,
-  resourceName: string,
-  resourceType: string
-): { found: boolean; lineNumber?: number; logicalId?: string } {
-  const lines = content.split('\n');
-
-  for (let i = 0; i < lines.length; i++) {
-    // Look for resource type
-    if (lines[i].includes(resourceType)) {
-      // Check surrounding lines for the resource name
-      const searchRange = lines.slice(Math.max(0, i - 10), i + 30).join('\n');
-      if (searchRange.includes(resourceName)) {
-        // Find the logical ID (the line before Type:)
-        for (let j = i - 1; j >= 0; j--) {
-          const logicalIdMatch = lines[j].match(/^\s{2}(\w+):\s*$/);
-          if (logicalIdMatch) {
-            return { found: true, lineNumber: j + 1, logicalId: logicalIdMatch[1] };
-          }
-        }
-      }
-    }
+  if (hasCloudFormation) {
+    hints.push(
+      'This uses CloudFormation. Tags should be added to the Tags property of each resource.'
+    );
   }
 
-  return { found: false };
-}
-
-/**
- * Generate patch for a resource
- */
-function generatePatch(
-  resource: ResourceToTag,
-  iacFiles: { path: string; type: 'terraform' | 'cloudformation' | 'serverless' }[],
-  iacDirectory: string,
-  outputFormat: 'patch' | 'instructions'
-): IacTagPatch | null {
-  const resourceName =
-    resource.type === 'ecs-service'
-      ? extractServiceNameFromEcsArn(resource.arn)
-      : extractInstanceIdFromRdsArn(resource.arn);
-
-  for (const iacFile of iacFiles) {
-    const content = fs.readFileSync(iacFile.path, 'utf-8');
-    const relativePath = path.relative(iacDirectory, iacFile.path);
-
-    if (iacFile.type === 'terraform') {
-      const found =
-        resource.type === 'ecs-service'
-          ? findTerraformEcsResource(content, resourceName)
-          : findTerraformRdsResource(content, resourceName);
-
-      if (found.found) {
-        const patchSnippet =
-          outputFormat === 'patch' ? generateTerraformTagsSnippet(resource.tags) : undefined;
-
-        return {
-          filePath: iacFile.path,
-          iacType: 'terraform',
-          resourceIdentifier: found.resourceName || resourceName,
-          suggestedTags: resource.tags,
-          lineNumber: found.lineNumber,
-          patchSnippet,
-          instructions:
-            outputFormat === 'instructions'
-              ? `In file ${relativePath}, find resource "${found.resourceName}" (around line ${found.lineNumber}) and add the following tags block:\n\n${generateTerraformTagsSnippet(resource.tags)}`
-              : `Add tags block to resource "${found.resourceName}"`,
-        };
-      }
-    } else if (iacFile.type === 'cloudformation') {
-      const cfnType =
-        resource.type === 'ecs-service' ? 'AWS::ECS::Service' : 'AWS::RDS::DBInstance';
-      const found = findCloudFormationResource(content, resourceName, cfnType);
-
-      if (found.found) {
-        const patchSnippet =
-          outputFormat === 'patch' ? generateCloudFormationTagsSnippet(resource.tags) : undefined;
-
-        return {
-          filePath: iacFile.path,
-          iacType: 'cloudformation',
-          resourceIdentifier: found.logicalId || resourceName,
-          suggestedTags: resource.tags,
-          lineNumber: found.lineNumber,
-          patchSnippet,
-          instructions:
-            outputFormat === 'instructions'
-              ? `In file ${relativePath}, find resource "${found.logicalId}" (around line ${found.lineNumber}) and add the following Tags property:\n\n${generateCloudFormationTagsSnippet(resource.tags)}`
-              : `Add Tags to resource "${found.logicalId}"`,
-        };
-      }
-    } else if (iacFile.type === 'serverless') {
-      // Serverless Framework - typically provider-level tags
-      if (content.includes('provider:')) {
-        return {
-          filePath: iacFile.path,
-          iacType: 'serverless',
-          resourceIdentifier: 'provider',
-          suggestedTags: resource.tags,
-          instructions:
-            outputFormat === 'instructions'
-              ? `In file ${relativePath}, add the following under the provider section:\n\n${generateServerlessTagsSnippet(resource.tags)}\n\nNote: Serverless Framework applies provider-level tags to all resources. For resource-specific tags, you may need to use CloudFormation resources.`
-              : 'Add tags to provider section',
-        };
-      }
-    }
+  // Check for specific directory patterns
+  if (fs.existsSync(path.join(directory, 'module'))) {
+    hints.push(
+      'Found "module" directory - this may use a shared module pattern where tags are defined as variables.'
+    );
   }
 
-  return null;
+  if (fs.existsSync(path.join(directory, 'unit'))) {
+    hints.push('Found "unit" directory - this appears to use Terragrunt unit pattern.');
+  }
+
+  if (fs.existsSync(path.join(directory, 'stack'))) {
+    hints.push('Found "stack" directory - this may use Terragrunt stack pattern.');
+  }
+
+  return hints;
 }
 
+// ============================================================================
+// Main Function
+// ============================================================================
+
 /**
- * Generates IaC tag modification suggestions.
+ * Generates IaC tag modification suggestions using Plugin architecture.
+ * Falls back to AI analysis context when no plugin can handle the IaC structure.
  *
  * @param input - Input parameters
- * @returns IaC patches and instructions
+ * @returns IaC patches, instructions, or AI analysis context
  */
 export async function generateIacTagPatch(
   input: GenerateIacTagPatchInput
-): Promise<GenerateIacTagPatchResult> {
+): Promise<GenerateIacTagPatchResultWithAiFallback> {
   const { iacDirectory, resources, outputFormat = 'instructions' } = input;
 
   try {
@@ -321,19 +252,31 @@ export async function generateIacTagPatch(
           terraform: 0,
           cloudformation: 0,
           serverless: 0,
+          terragrunt: 0,
           notFound: resources.length,
         },
         notFoundResources: resources.map((r) => r.arn),
       };
     }
 
-    // Scan for IaC files
-    const iacFiles = scanIacFiles(iacDirectory);
+    // Try to find a matching plugin
+    const pluginResult = await globalRegistry.getBestPlugin(iacDirectory);
 
-    if (iacFiles.length === 0) {
+    if (!pluginResult) {
+      // No plugin matched - prepare AI Fallback context
+      const directoryStructure = buildDirectoryStructure(iacDirectory);
+      const sampleFiles = collectSampleFiles(iacDirectory);
+      const hints = generateHints(iacDirectory, sampleFiles);
+
+      const aiContext: AiAnalysisContext = {
+        directoryStructure,
+        sampleFiles,
+        resources,
+        hints,
+      };
+
       return {
-        success: false,
-        error: 'No IaC files found in the specified directory',
+        success: true,
         iacDirectory,
         patches: [],
         summary: {
@@ -341,23 +284,33 @@ export async function generateIacTagPatch(
           terraform: 0,
           cloudformation: 0,
           serverless: 0,
+          terragrunt: 0,
           notFound: resources.length,
         },
         notFoundResources: resources.map((r) => r.arn),
+        requiresAiAnalysis: true,
+        aiAnalysisContext: aiContext,
       };
     }
 
+    const { plugin, detection } = pluginResult;
+
+    // Use the matched plugin to find and generate patches
     const patches: IacTagPatch[] = [];
     const notFoundResources: string[] = [];
     let terraform = 0;
     let cloudformation = 0;
     let serverless = 0;
+    let terragrunt = 0;
 
     for (const resource of resources) {
-      const patch = generatePatch(resource, iacFiles, iacDirectory, outputFormat);
+      const match = await plugin.findResource(iacDirectory, resource.arn, resource.type);
 
-      if (patch) {
+      if (match) {
+        const patch = plugin.generatePatch(match, resource.tags);
         patches.push(patch);
+
+        // Count by IaC type
         switch (patch.iacType) {
           case 'terraform':
             terraform++;
@@ -368,10 +321,83 @@ export async function generateIacTagPatch(
           case 'serverless':
             serverless++;
             break;
+          case 'terragrunt':
+            terragrunt++;
+            break;
         }
       } else {
         notFoundResources.push(resource.arn);
       }
+    }
+
+    // If some resources were not found, check if we should trigger partial AI fallback
+    const needsPartialAiFallback =
+      notFoundResources.length > 0 && notFoundResources.length < resources.length;
+
+    if (needsPartialAiFallback) {
+      // Found some but not all - still provide AI context for unfound resources
+      const unfoundResourcesList = resources.filter((r) => notFoundResources.includes(r.arn));
+      const directoryStructure = buildDirectoryStructure(iacDirectory);
+      const sampleFiles = collectSampleFiles(iacDirectory);
+      const hints = generateHints(iacDirectory, sampleFiles);
+      hints.push(
+        `Plugin "${plugin.name}" (${detection.iacType}) matched but could not find ${notFoundResources.length} resource(s).`
+      );
+
+      return {
+        success: true,
+        iacDirectory,
+        patches,
+        summary: {
+          totalPatches: patches.length,
+          terraform,
+          cloudformation,
+          serverless,
+          terragrunt,
+          notFound: notFoundResources.length,
+        },
+        notFoundResources,
+        requiresAiAnalysis: true,
+        aiAnalysisContext: {
+          directoryStructure,
+          sampleFiles,
+          resources: unfoundResourcesList,
+          hints,
+        },
+      };
+    }
+
+    // All resources found (or none found and full AI fallback)
+    if (patches.length === 0) {
+      // No patches generated - full AI fallback
+      const directoryStructure = buildDirectoryStructure(iacDirectory);
+      const sampleFiles = collectSampleFiles(iacDirectory);
+      const hints = generateHints(iacDirectory, sampleFiles);
+      hints.push(
+        `Plugin "${plugin.name}" (${detection.iacType}) detected but could not match any resources.`
+      );
+
+      return {
+        success: true,
+        iacDirectory,
+        patches: [],
+        summary: {
+          totalPatches: 0,
+          terraform,
+          cloudformation,
+          serverless,
+          terragrunt,
+          notFound: resources.length,
+        },
+        notFoundResources: resources.map((r) => r.arn),
+        requiresAiAnalysis: true,
+        aiAnalysisContext: {
+          directoryStructure,
+          sampleFiles,
+          resources,
+          hints,
+        },
+      };
     }
 
     return {
@@ -383,6 +409,7 @@ export async function generateIacTagPatch(
         terraform,
         cloudformation,
         serverless,
+        terragrunt,
         notFound: notFoundResources.length,
       },
       notFoundResources,
@@ -399,6 +426,7 @@ export async function generateIacTagPatch(
         terraform: 0,
         cloudformation: 0,
         serverless: 0,
+        terragrunt: 0,
         notFound: resources.length,
       },
       notFoundResources: resources.map((r) => r.arn),

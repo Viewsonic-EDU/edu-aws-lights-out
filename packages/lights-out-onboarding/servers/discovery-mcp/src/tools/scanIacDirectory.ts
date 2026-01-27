@@ -3,6 +3,9 @@
  *
  * Scans a directory for Infrastructure as Code files (Terraform, CloudFormation, Terragrunt)
  * and extracts resource definitions to provide context for Lights Out analysis.
+ *
+ * Uses the IaC Plugin Registry for type detection, while maintaining its own
+ * resource extraction and dependency analysis logic.
  */
 
 import * as fs from 'fs';
@@ -13,16 +16,18 @@ import type {
   IacFileInfo,
   IacResourceCategory,
   DependencyEdge,
+  IacType,
 } from '../types.js';
+import { globalRegistry } from './iac-plugins/index.js';
 
-// Supported IaC file patterns
-const IAC_PATTERNS = {
-  terraform: ['.tf', '.tf.json'],
-  terragrunt: ['terragrunt.hcl'],
-  cloudformation: ['.yaml', '.yml', '.json', '.template'],
-};
+// ============================================================================
+// Resource Patterns (for broad exploration - more types than Plugin system)
+// ============================================================================
 
-// Resource type patterns to look for
+/**
+ * Resource type patterns to look for
+ * Note: This covers more resource types than the Plugin system (which only handles ECS/RDS)
+ */
 const RESOURCE_PATTERNS: Record<IacResourceCategory, RegExp[]> = {
   ecs: [
     /resource\s+"aws_ecs_service"/g,
@@ -66,15 +71,29 @@ const RESOURCE_PATTERNS: Record<IacResourceCategory, RegExp[]> = {
   ],
 };
 
-// CloudFormation reference patterns (for future use)
-// const CFN_REF_PATTERN = /!Ref\s+([A-Za-z0-9]+)/g;
-// const CFN_GETATT_PATTERN = /!GetAtt\s+([A-Za-z0-9]+)\.([A-Za-z0-9]+)/g;
-// const CFN_DEPENDS_ON_PATTERN = /DependsOn:\s*\n((?:\s+-\s*[A-Za-z0-9]+\n?)+)/g;
+// ============================================================================
+// Fallback File Discovery (when no plugin matches or for additional files)
+// ============================================================================
+
+const SKIP_DIRS = [
+  'node_modules',
+  '.git',
+  '.terraform',
+  '.terragrunt-cache',
+  'vendor',
+  'dist',
+  'build',
+];
 
 /**
- * Recursively find all IaC files in a directory
+ * Fallback file discovery for when plugins don't provide complete file lists
+ * or for IaC types not covered by plugins
  */
-function findIacFiles(dir: string, maxDepth: number = 5, currentDepth: number = 0): IacFileInfo[] {
+function discoverIacFiles(
+  dir: string,
+  maxDepth: number = 5,
+  currentDepth: number = 0
+): IacFileInfo[] {
   const files: IacFileInfo[] = [];
 
   if (currentDepth > maxDepth) {
@@ -87,40 +106,41 @@ function findIacFiles(dir: string, maxDepth: number = 5, currentDepth: number = 
     for (const entry of entries) {
       const fullPath = path.join(dir, entry.name);
 
-      // Skip common non-IaC directories
       if (entry.isDirectory()) {
-        const skipDirs = ['node_modules', '.git', '.terraform', 'vendor', 'dist', 'build'];
-        if (!skipDirs.includes(entry.name)) {
-          files.push(...findIacFiles(fullPath, maxDepth, currentDepth + 1));
+        if (!SKIP_DIRS.includes(entry.name)) {
+          files.push(...discoverIacFiles(fullPath, maxDepth, currentDepth + 1));
         }
         continue;
       }
 
       if (!entry.isFile()) continue;
 
-      // Check if file matches IaC patterns
       const ext = path.extname(entry.name);
       const fileName = entry.name;
 
-      let iacType: IacFileInfo['type'] | null = null;
+      let iacType: IacType | null = null;
 
-      // Check Terragrunt first (more specific)
-      if (IAC_PATTERNS.terragrunt.includes(fileName)) {
+      // Terragrunt files (most specific first)
+      if (fileName === 'terragrunt.hcl' || fileName === 'terragrunt.stack.hcl') {
         iacType = 'terragrunt';
       }
-      // Check Terraform
-      else if (IAC_PATTERNS.terraform.some((p) => fileName.endsWith(p))) {
+      // Terraform files
+      else if (fileName.endsWith('.tf') || fileName.endsWith('.tf.json')) {
         iacType = 'terraform';
       }
-      // Check CloudFormation (need to verify content)
-      else if (IAC_PATTERNS.cloudformation.includes(ext)) {
-        // Quick check for CloudFormation markers
+      // Serverless Framework
+      else if (fileName === 'serverless.yml' || fileName === 'serverless.yaml') {
+        iacType = 'serverless';
+      }
+      // CloudFormation (need content check)
+      else if (['.yaml', '.yml', '.json', '.template'].includes(ext)) {
         try {
           const content = fs.readFileSync(fullPath, 'utf-8').slice(0, 1000);
           if (
             content.includes('AWSTemplateFormatVersion') ||
             content.includes('Resources:') ||
-            content.includes('"Resources"')
+            content.includes('"Resources"') ||
+            content.includes('AWS::')
           ) {
             iacType = 'cloudformation';
           }
@@ -138,11 +158,22 @@ function findIacFiles(dir: string, maxDepth: number = 5, currentDepth: number = 
         });
       }
     }
-  } catch (error) {
+  } catch {
     // Directory not accessible, skip
   }
 
   return files;
+}
+
+// ============================================================================
+// Resource Extraction Helpers
+// ============================================================================
+
+/**
+ * Get line number from character index
+ */
+function getLineNumber(content: string, index: number): number {
+  return content.slice(0, index).split('\n').length;
 }
 
 /**
@@ -178,20 +209,18 @@ function extractTerraformResourceBlock(content: string, startIndex: number): str
  */
 function extractTerraformReferences(block: string): string[] {
   const references: string[] = [];
-
-  // Extract resource attribute references (e.g., aws_rds_cluster.db.endpoint)
   const attrRefPattern = /([a-z_]+\.[a-z0-9_-]+)(?:\.[a-z_]+)?/g;
   const matches = block.matchAll(attrRefPattern);
+
   for (const match of matches) {
     const ref = match[1];
-    // Filter out common false positives
     if (
       !ref.startsWith('var.') &&
       !ref.startsWith('local.') &&
       !ref.startsWith('data.') &&
       !ref.startsWith('module.') &&
       !ref.includes('.tf') &&
-      ref.includes('_') // Terraform resource types contain underscore
+      ref.includes('_')
     ) {
       if (!references.includes(ref)) {
         references.push(ref);
@@ -212,7 +241,6 @@ function extractTerraformDependsOn(block: string): string[] {
   const matches = block.matchAll(pattern);
   for (const match of matches) {
     const deps = match[1];
-    // Extract individual resource references
     const refPattern = /([a-z_]+\.[a-z0-9_-]+)/g;
     const refMatches = deps.matchAll(refPattern);
     for (const refMatch of refMatches) {
@@ -230,8 +258,6 @@ function extractTerraformDependsOn(block: string): string[] {
  */
 function extractTerraformSecurityGroups(block: string): string[] {
   const securityGroups: string[] = [];
-
-  // Check both security_groups and vpc_security_group_ids
   const patterns = [
     /security_groups\s*=\s*\[([\s\S]*?)\]/g,
     /vpc_security_group_ids\s*=\s*\[([\s\S]*?)\]/g,
@@ -242,7 +268,6 @@ function extractTerraformSecurityGroups(block: string): string[] {
     const matches = block.matchAll(pattern);
     for (const match of matches) {
       const sgs = match[1];
-      // Extract resource references
       const refPattern = /([a-z_]+\.[a-z0-9_-]+)/g;
       const refMatches = sgs.matchAll(refPattern);
       for (const refMatch of refMatches) {
@@ -254,6 +279,16 @@ function extractTerraformSecurityGroups(block: string): string[] {
   }
 
   return securityGroups;
+}
+
+/**
+ * Extract a code snippet around a match
+ */
+function extractSnippet(content: string, lineNumber: number, contextLines: number = 5): string {
+  const lines = content.split('\n');
+  const start = Math.max(0, lineNumber - contextLines - 1);
+  const end = Math.min(lines.length, lineNumber + contextLines);
+  return lines.slice(start, end).join('\n');
 }
 
 /**
@@ -286,7 +321,6 @@ function extractResources(
     RegExp[],
   ][]) {
     for (const pattern of patterns) {
-      // Reset regex state
       pattern.lastIndex = 0;
       const matches = content.matchAll(pattern);
       for (const match of matches) {
@@ -303,23 +337,18 @@ function extractResources(
           const nameInfo = resourceNameMap.get(lineNumber);
           if (nameInfo) {
             resource.resourceName = nameInfo.name;
-
-            // Extract the full resource block
             const block = extractTerraformResourceBlock(content, match.index);
 
-            // Extract references
             const references = extractTerraformReferences(block);
             if (references.length > 0) {
               resource.references = references;
             }
 
-            // Extract depends_on
             const dependsOn = extractTerraformDependsOn(block);
             if (dependsOn.length > 0) {
               resource.dependsOn = dependsOn;
             }
 
-            // Extract security groups
             const securityGroups = extractTerraformSecurityGroups(block);
             if (securityGroups.length > 0) {
               resource.securityGroups = securityGroups;
@@ -345,7 +374,6 @@ function buildDependencyEdges(resources: IacResourceDefinition[]): DependencyEdg
   // Build a map of resource identifiers
   for (const resource of resources) {
     if (resource.resourceName) {
-      // Use resourceType.resourceName as the key (e.g., "aws_ecs_service.main")
       const resourceTypeMatch = resource.resourceType.match(/"([^"]+)"/);
       if (resourceTypeMatch) {
         const key = `${resourceTypeMatch[1]}.${resource.resourceName}`;
@@ -382,7 +410,6 @@ function buildDependencyEdges(resources: IacResourceDefinition[]): DependencyEdg
     if (resource.references) {
       for (const ref of resource.references) {
         if (resourceMap.has(ref) && ref !== fromKey) {
-          // Check if this edge already exists from depends_on
           const existingEdge = edges.find((e) => e.from === fromKey && e.to === ref);
           if (!existingEdge) {
             edges.push({
@@ -416,25 +443,15 @@ function buildDependencyEdges(resources: IacResourceDefinition[]): DependencyEdg
   return edges;
 }
 
-/**
- * Get line number from character index
- */
-function getLineNumber(content: string, index: number): number {
-  return content.slice(0, index).split('\n').length;
-}
+// ============================================================================
+// Main Function
+// ============================================================================
 
 /**
- * Extract a code snippet around a match
- */
-function extractSnippet(content: string, lineNumber: number, contextLines: number = 5): string {
-  const lines = content.split('\n');
-  const start = Math.max(0, lineNumber - contextLines - 1);
-  const end = Math.min(lines.length, lineNumber + contextLines);
-  return lines.slice(start, end).join('\n');
-}
-
-/**
- * Scan a directory for IaC files and extract resource definitions
+ * Scan a directory for IaC files and extract resource definitions.
+ *
+ * Uses the IaC Plugin Registry for type detection when available,
+ * with fallback to direct file discovery.
  */
 export async function scanIacDirectory(input: {
   directory: string;
@@ -481,18 +498,59 @@ export async function scanIacDirectory(input: {
     };
   }
 
-  // Find all IaC files
-  const files = findIacFiles(directory);
+  // Step 1: Use Plugin Registry for detection
+  const detectedPlugins = await globalRegistry.detectPlugins(directory);
+  const detectedTypes = new Set<IacType>();
+  const pluginFiles: IacFileInfo[] = [];
+
+  for (const { detection } of detectedPlugins) {
+    detectedTypes.add(detection.iacType);
+
+    // Collect files from plugin metadata
+    if (detection.metadata?.detectedFiles) {
+      for (const filePath of detection.metadata.detectedFiles) {
+        // Avoid duplicates
+        if (!pluginFiles.some((f) => f.path === filePath)) {
+          pluginFiles.push({
+            path: filePath,
+            relativePath: path.relative(directory, filePath),
+            type: detection.iacType,
+            fileName: path.basename(filePath),
+          });
+        }
+      }
+    }
+  }
+
+  // Step 2: Fallback file discovery for comprehensive scanning
+  // (Plugins might not return all files, and we need to scan for resources in all files)
+  const discoveredFiles = discoverIacFiles(directory);
+
+  // Merge files, preferring plugin-detected types
+  const fileMap = new Map<string, IacFileInfo>();
+
+  // Add plugin files first (higher confidence)
+  for (const file of pluginFiles) {
+    fileMap.set(file.path, file);
+  }
+
+  // Add discovered files (only if not already present)
+  for (const file of discoveredFiles) {
+    if (!fileMap.has(file.path)) {
+      fileMap.set(file.path, file);
+    }
+  }
+
+  const files = Array.from(fileMap.values());
   const resources: IacResourceDefinition[] = [];
 
-  // Process each file
+  // Step 3: Process each file for resource extraction
   for (const file of files) {
     try {
       const content = fs.readFileSync(file.path, 'utf-8');
       const isTerraform = file.type === 'terraform' || file.type === 'terragrunt';
       const fileResources = extractResources(content, file.relativePath, isTerraform);
 
-      // Add snippets if requested
       if (includeSnippets) {
         for (const resource of fileResources) {
           resource.snippet = extractSnippet(content, resource.lineNumber);
@@ -505,15 +563,17 @@ export async function scanIacDirectory(input: {
     }
   }
 
-  // Build dependency graph
+  // Step 4: Build dependency graph
   const dependencyGraph = buildDependencyEdges(resources);
 
-  // Build summary
+  // Step 5: Build summary
+  const serverlessCount = files.filter((f) => f.type === 'serverless').length;
   const summary = {
     totalFiles: files.length,
     terraform: files.filter((f) => f.type === 'terraform').length,
     terragrunt: files.filter((f) => f.type === 'terragrunt').length,
     cloudformation: files.filter((f) => f.type === 'cloudformation').length,
+    ...(serverlessCount > 0 && { serverless: serverlessCount }),
     ecsResources: resources.filter((r) => r.type === 'ecs').length,
     rdsResources: resources.filter((r) => r.type === 'rds').length,
     autoscalingResources: resources.filter((r) => r.type === 'autoscaling').length,

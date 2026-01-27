@@ -48,54 +48,64 @@ function extractRegions(content: string): string[] {
 }
 
 /**
- * Extract common prefix from an array of service names
- * Example: ['vs-auth-dev', 'vs-admin-auth-dev', 'vs-account-dev'] => 'vs-account'
+ * Extract project name from cluster name
+ * Example: 'vs-account-service-ecs-cluster-dev' => 'vs-account'
+ *
+ * Pattern: looks for common suffixes like '-ecs-cluster-{env}', '-service-{env}', etc.
+ * and extracts the meaningful prefix before them.
  */
-function extractCommonPrefix(names: string[]): string {
-  if (names.length === 0) return 'unknown';
-  if (names.length === 1) {
-    // For single name, extract prefix before last hyphen segment
-    const parts = names[0].split('-');
-    if (parts.length >= 2) {
-      // Remove the last segment (usually env like 'dev', 'staging')
-      return parts.slice(0, -1).join('-');
-    }
-    return names[0];
-  }
+function extractProjectFromClusterName(clusterName: string): string | null {
+  if (!clusterName) return null;
 
-  // Find common prefix by comparing characters
-  const sortedNames = [...names].sort();
-  const first = sortedNames[0];
-  const last = sortedNames[sortedNames.length - 1];
+  // Common patterns to remove from cluster names
+  const patternsToRemove = [
+    /-ecs-cluster-\w+$/i, // vs-account-service-ecs-cluster-dev
+    /-cluster-\w+$/i, // vs-account-cluster-dev
+    /-ecs-\w+$/i, // vs-account-ecs-dev
+    /-service-\w+$/i, // vs-account-service-dev (if no ecs-cluster)
+  ];
 
-  let commonLength = 0;
-  for (let i = 0; i < first.length && i < last.length; i++) {
-    if (first[i] === last[i]) {
-      commonLength = i + 1;
-    } else {
+  let project = clusterName;
+
+  for (const pattern of patternsToRemove) {
+    if (pattern.test(project)) {
+      project = project.replace(pattern, '');
       break;
     }
   }
 
-  let prefix = first.substring(0, commonLength);
-
-  // Clean up prefix: remove trailing hyphen
-  if (prefix.endsWith('-')) {
-    prefix = prefix.slice(0, -1);
+  // If we still have a meaningful prefix (at least 2 characters), return it
+  if (project && project.length >= 2 && project !== clusterName) {
+    return project;
   }
 
-  // If prefix is too short or empty, try to find a meaningful prefix
-  if (prefix.length < 3) {
-    // Extract first two segments from first name
-    const parts = first.split('-');
-    if (parts.length >= 2) {
-      prefix = parts.slice(0, 2).join('-');
-    } else {
-      prefix = first;
+  return null;
+}
+
+/**
+ * Extract project name, prioritizing cluster name over service names
+ * Returns null if no meaningful project can be detected (user should be asked)
+ */
+function extractProjectName(clusterNames: string[], _serviceNames: string[]): string | null {
+  // First, try to extract from cluster name
+  if (clusterNames.length > 0) {
+    // Use the most common cluster name
+    const clusterCounts = new Map<string, number>();
+    for (const cluster of clusterNames) {
+      clusterCounts.set(cluster, (clusterCounts.get(cluster) || 0) + 1);
+    }
+    const mostCommonCluster = [...clusterCounts.entries()].sort((a, b) => b[1] - a[1])[0]?.[0];
+
+    if (mostCommonCluster) {
+      const project = extractProjectFromClusterName(mostCommonCluster);
+      if (project) {
+        return project;
+      }
     }
   }
 
-  return prefix || 'unknown';
+  // If cluster name doesn't yield a result, return null to prompt user
+  return null;
 }
 
 /**
@@ -104,7 +114,7 @@ function extractCommonPrefix(names: string[]): string {
 function parseEcsTable(
   content: string,
   accountId: string,
-  projectName: string
+  projectName: string | null
 ): ParsedEcsResource[] {
   const resources: ParsedEcsResource[] = [];
 
@@ -161,9 +171,16 @@ function parseEcsTable(
     let classification: ResourceClassification;
     let classificationReason: string;
 
+    // Parse status to check if service is stopped (0/0)
+    const isServiceStopped = status === '0/0';
+
     if (lightsOutSupport === 'not-supported') {
       classification = 'excluded';
       classificationReason = 'Resource type not supported by Lights Out';
+    } else if (isServiceStopped) {
+      // Services with 0/0 status need confirmation - they may be intentionally stopped
+      classification = 'needConfirmation';
+      classificationReason = '服務目前已停止 (0/0)，請確認是否要納入 Lights Out 管理';
     } else if (riskLevel === 'high' || lightsOutSupport === 'caution') {
       classification = 'needConfirmation';
       classificationReason =
@@ -179,9 +196,10 @@ function parseEcsTable(
     const arn = `arn:aws:ecs:${region}:${accountId}:service/${cluster}/${serviceName}`;
 
     // Suggest tags based on risk level
+    // Use empty string for project if not detected (skill will ask user)
     const suggestedTags: LightsOutTags = {
       'lights-out:managed': 'true',
-      'lights-out:project': projectName,
+      'lights-out:project': projectName || '',
       'lights-out:priority': riskLevel === 'high' ? '100' : '50',
     };
 
@@ -210,7 +228,7 @@ function parseEcsTable(
 function parseRdsTable(
   content: string,
   accountId: string,
-  projectName: string
+  projectName: string | null
 ): ParsedRdsResource[] {
   const resources: ParsedRdsResource[] = [];
 
@@ -238,20 +256,33 @@ function parseRdsTable(
 
     const [region, instanceId, engineStr, status, instanceType, supportStr] = cells;
 
+    // Check if this is a Read Replica (by instance ID pattern or support string)
+    const isReadReplica =
+      instanceId.toLowerCase().includes('replica') ||
+      instanceId.toLowerCase().includes('read-replica') ||
+      supportStr.toLowerCase().includes('read-replica') ||
+      supportStr.toLowerCase().includes('replica');
+
     // Parse lights out support
-    const lightsOutSupport: 'supported' | 'cluster-managed' | 'not-supported' = supportStr.includes(
-      'supported'
-    )
-      ? 'supported'
-      : supportStr.includes('cluster-managed')
-        ? 'cluster-managed'
-        : 'not-supported';
+    let lightsOutSupport: 'supported' | 'cluster-managed' | 'not-supported';
+    if (isReadReplica) {
+      lightsOutSupport = 'not-supported';
+    } else if (supportStr.includes('supported') && !supportStr.includes('not-supported')) {
+      lightsOutSupport = 'supported';
+    } else if (supportStr.includes('cluster-managed')) {
+      lightsOutSupport = 'cluster-managed';
+    } else {
+      lightsOutSupport = 'not-supported';
+    }
 
     // Determine classification
     let classification: ResourceClassification;
     let classificationReason: string;
 
-    if (lightsOutSupport === 'supported') {
+    if (isReadReplica) {
+      classification = 'excluded';
+      classificationReason = 'Read Replica 不適合獨立啟停，應跟隨主資料庫';
+    } else if (lightsOutSupport === 'supported') {
       classification = 'autoApply';
       classificationReason = 'Standard RDS instance with full Lights Out support';
     } else if (lightsOutSupport === 'cluster-managed') {
@@ -260,18 +291,19 @@ function parseRdsTable(
         'Aurora cluster member - must be managed via cluster (not yet supported)';
     } else {
       classification = 'excluded';
-      classificationReason = 'RDS type not supported (e.g., read replica)';
+      classificationReason = 'RDS type not supported';
     }
 
     // Generate ARN
     const arn = `arn:aws:rds:${region}:${accountId}:db:${instanceId}`;
 
     // Suggest tags only for supported instances
+    // Use empty string for project if not detected (skill will ask user)
     let suggestedTags: LightsOutTags | undefined;
     if (lightsOutSupport === 'supported') {
       suggestedTags = {
         'lights-out:managed': 'true',
-        'lights-out:project': projectName,
+        'lights-out:project': projectName || '',
         'lights-out:priority': '100', // RDS should start first, stop last
       };
     }
@@ -313,7 +345,7 @@ export async function parseDiscoveryReport(
         reportPath,
         accountId: 'unknown',
         regions: [],
-        detectedProject: 'unknown',
+        detectedProject: null,
         ecsResources: [],
         rdsResources: [],
         summary: {
@@ -338,10 +370,11 @@ export async function parseDiscoveryReport(
     const accountId = extractAccountId(content, reportPath);
     const regions = extractRegions(content);
 
-    // First pass: extract service names to find common prefix
+    // First pass: extract cluster names and service names to find project name
     const ecsSection = content.match(
       /## ECS Services\n\n([\s\S]*?)(?=\n##|\n---|\n### 高風險服務說明|$)/
     );
+    const clusterNames: string[] = [];
     const serviceNames: string[] = [];
     if (ecsSection) {
       const tableContent = ecsSection[1];
@@ -354,13 +387,14 @@ export async function parseDiscoveryReport(
           .map((c) => c.trim())
           .filter((c) => c);
         if (cells.length >= 3) {
+          clusterNames.push(cells[1]); // cluster is the 2nd column
           serviceNames.push(cells[2]); // serviceName is the 3rd column
         }
       }
     }
 
-    // Extract common prefix for project name
-    const detectedProject = extractCommonPrefix(serviceNames);
+    // Extract project name from cluster name (priority) or service names
+    const detectedProject = extractProjectName(clusterNames, serviceNames);
 
     // Parse resources with project name
     const ecsResources = parseEcsTable(content, accountId, detectedProject);
@@ -399,7 +433,7 @@ export async function parseDiscoveryReport(
       reportPath,
       accountId: 'unknown',
       regions: [],
-      detectedProject: 'unknown',
+      detectedProject: null,
       ecsResources: [],
       rdsResources: [],
       summary: {
