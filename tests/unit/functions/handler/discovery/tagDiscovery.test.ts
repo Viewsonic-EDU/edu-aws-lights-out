@@ -208,6 +208,12 @@ describe('TagDiscovery', () => {
         'my-aurora-cluster',
         {},
       ],
+      [
+        'arn:aws:autoscaling:us-east-1:123456789012:autoScalingGroup:12345678-1234-1234-1234-123456789012:autoScalingGroupName/my-asg',
+        'autoscaling:autoScalingGroup',
+        'my-asg',
+        {},
+      ],
       ['unsupported-arn', 'unknown', 'unsupported-arn', {}],
     ])(
       'should parse ARN correctly: %s',
