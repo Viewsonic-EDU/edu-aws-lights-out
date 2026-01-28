@@ -37,6 +37,13 @@ provider:
           Resource: '*'
         - Effect: Allow
           Action:
+            - autoscaling:DescribeAutoScalingGroups
+            - autoscaling:UpdateAutoScalingGroup
+            - autoscaling:SuspendProcesses
+            - autoscaling:ResumeProcesses
+          Resource: '*'
+        - Effect: Allow
+          Action:
             - logs:CreateLogGroup
             - logs:CreateLogStream
             - logs:PutLogEvents
