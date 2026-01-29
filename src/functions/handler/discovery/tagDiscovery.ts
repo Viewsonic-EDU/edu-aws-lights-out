@@ -257,6 +257,18 @@ export class TagDiscovery {
       return [resourceIdPart, {}];
     }
 
+    if (resourceType === 'autoscaling:autoScalingGroup') {
+      // arn:aws:autoscaling:region:account:autoScalingGroup:uuid:autoScalingGroupName/asg-name
+      // The parts after the 5th colon are: autoScalingGroup:uuid:autoScalingGroupName/asg-name
+      // We need to extract the ASG name from the last segment
+      const fullResourcePart = parts.slice(5).join(':');
+      if (fullResourcePart.includes('/')) {
+        // Extract the ASG name after the last '/'
+        return [fullResourcePart.split('/').pop()!, {}];
+      }
+      return [fullResourcePart, {}];
+    }
+
     // Unsupported resource type or malformed ARN
     return [arn, {}];
   }

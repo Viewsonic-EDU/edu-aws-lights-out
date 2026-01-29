@@ -545,7 +545,8 @@ IaC 修改建議已儲存至：
 相關文件：
 
 - docs/deployment-guide.md - 完整部署指南
-- config/sss-lab.yml - 配置範例
+- config/aws-account-example.yml - Account 級配置範例
+- config/aws-account/project-example.yml - 專案級配置範例（多時區）
 
 ```
 

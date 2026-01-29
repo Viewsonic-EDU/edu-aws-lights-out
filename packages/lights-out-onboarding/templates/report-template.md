@@ -102,7 +102,7 @@ resource_defaults:
 
 2. **Create Configuration File**
 
-   Create a new configuration file at `config/<env-name>.yml` based on the template in `config/sss-lab.yml`.
+   Create a new configuration file at `config/<env-name>.yml` based on the template in `config/aws-account-example.yml`.
 
 3. **Deploy**
 

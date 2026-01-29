@@ -88,8 +88,8 @@ Python 原型實作已完成並移除（2025-12-24）。此階段驗證了核心
 | -------------------- | ------ | ------ | -------------------------------------------------- |
 | 建立 IAM Role        | DevOps | ✅     | Serverless Framework 自動建立（含 ECS + RDS 權限） |
 | 建立 SSM Parameter   | DevOps | ✅     | /lights-out/config（手動創建，YAML 轉 JSON）       |
-| 為資源加標籤         | DevOps | ✅     | 已標記 sss-lab 環境資源                            |
-| 部署 Lambda Function | DevOps | ✅     | 使用 Serverless Framework v3.39.0 部署至 sss-lab   |
+| 為資源加標籤         | DevOps | ✅     | 已標記環境資源                                     |
+| 部署 Lambda Function | DevOps | ✅     | 使用 Serverless Framework v3.39.0 部署             |
 | 測試 discover action | DevOps | ✅     | 驗證資源發現功能（aws lambda invoke）              |
 | 測試 status action   | DevOps | ✅     | 手動 invoke 驗證成功                               |
 | 測試 stop action     | DevOps | ✅     | 驗證 ECS desiredCount=0 + RDS stop（含 dry-run）   |

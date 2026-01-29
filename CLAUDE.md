@@ -30,7 +30,8 @@ src/
 ├── handlers/
 │   ├── base.ts         # Abstract ResourceHandler interface
 │   ├── ecsService.ts  # ECS service handler
-│   └── rdsInstance.ts # RDS instance handler
+│   ├── rdsInstance.ts # RDS instance handler
+│   └── asgGroup.ts    # EC2 Auto Scaling Group handler
 └── utils/
     └── logger.ts       # Pino logger setup
 ```
@@ -182,6 +183,67 @@ resource_defaults:
 - 成功：`DB instance stop initiated (status: stopping, was: available). Full stop takes ~5-10 minutes.`
 - 失敗：`Stop operation failed`
 
+## EC2 Auto Scaling Group 配置
+
+**問題：** EC2 ASG 有 Scaling Policies（如 Target Tracking），直接設定容量會與 policies 衝突。
+
+**解決方案：Suspend Processes + Fire-and-Forget 模式**
+
+Handler 採用以下策略：
+
+**STOP 流程：**
+
+1. Suspend Scaling Processes（防止 ASG 自動調整）
+2. 更新 ASG（MinSize=0, MaxSize=0, DesiredCapacity=0）
+3. 等待 `waitAfterCommand` 秒確認操作已開始
+4. 立即返回（實例會逐漸終止）
+
+**START 流程：**
+
+1. 更新 ASG（MinSize=N, MaxSize=M, DesiredCapacity=D）
+2. Resume Scaling Processes（恢復自動擴展）
+3. 等待 `waitAfterCommand` 秒確認操作已開始
+4. 立即返回（實例會逐漸啟動）
+
+**配置參數：**
+
+| 參數                 | 類型     | 預設值                                                                                        | 說明                             |
+| -------------------- | -------- | --------------------------------------------------------------------------------------------- | -------------------------------- |
+| `suspendProcesses`   | boolean  | true                                                                                          | 停止時是否暫停 Scaling Processes |
+| `processesToSuspend` | string[] | ['Launch', 'Terminate', 'HealthCheck', 'ReplaceUnhealthy', 'AZRebalance', 'ScheduledActions'] | 要暫停的 processes 清單          |
+| `waitAfterCommand`   | number   | 30                                                                                            | 發送命令後等待秒數               |
+
+**配置範例：**
+
+```yaml
+resource_defaults:
+  autoscaling-group:
+    suspendProcesses: true
+    waitAfterCommand: 30
+    start:
+      minSize: 2
+      maxSize: 10
+      desiredCapacity: 2
+    stop:
+      minSize: 0
+      maxSize: 0
+      desiredCapacity: 0
+```
+
+**Priority 建議（啟動順序）：**
+
+| 資源類型 | 建議 Priority | 說明                         |
+| -------- | ------------- | ---------------------------- |
+| RDS      | 10            | 資料庫最慢，先啟動           |
+| ASG      | 50            | 運算資源，中間啟動           |
+| ECS      | 100           | 依賴 ASG（on EC2），最後啟動 |
+
+**重要注意事項：**
+
+- ASG 終止 EC2 實例後，Instance Store 資料會遺失
+- 僅適用於無狀態工作負載，或確保使用 EBS
+- EC2 啟動需 2-5 分鐘，建議使用 Fire-and-Forget 模式
+
 ## Known Issues & Workarounds
 
 ### Issue #1: Serverless Framework + AWS SSO Credentials ✅ RESOLVED
@@ -254,5 +316,6 @@ aws lambda invoke \
 - [AGENTS.md](./AGENTS.md) — 多 Agent 協作 + 技術規格
 - [TASKS.md](./TASKS.md) — 任務追蹤
 - [docs/deployment-guide.md](./docs/deployment-guide.md) — 完整部署與操作手冊
-- [config/sss-lab.yml](./config/sss-lab.yml) — 配置範例（含詳細註解）
+- [config/aws-account-example.yml](./config/aws-account-example.yml) — Account 級配置範例
+- [config/aws-account/project-example.yml](./config/aws-account/project-example.yml) — 專案級配置範例（多時區）
 - [serverless.yml](./serverless.yml) — Infrastructure as Code

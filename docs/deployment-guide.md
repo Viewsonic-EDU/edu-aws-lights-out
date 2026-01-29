@@ -104,8 +104,11 @@ cat > scripts/arguments/new-project.json <<'EOF'
 }
 EOF
 
-# 複製並修改 YAML 配置
-cp config/sss-lab.yml config/pg-development/new-project.yml
+# 複製並修改 YAML 配置（選擇適合的範例）
+# Account 級配置（單一專案）：
+cp config/aws-account-example.yml config/pg-development/new-project.yml
+# 或專案級配置（多時區）：
+# cp config/aws-account/project-example.yml config/pg-development/new-project.yml
 ```
 
 ### 2. 更新 serverless.yml
@@ -238,5 +241,6 @@ aws ssm delete-parameter \
 ## 相關文件
 
 - [CLAUDE.md](../CLAUDE.md) - 專案架構與規範
-- [config/sss-lab.yml](../config/sss-lab.yml) - 配置範例
+- [config/aws-account-example.yml](../config/aws-account-example.yml) - Account 級配置範例
+- [config/aws-account/project-example.yml](../config/aws-account/project-example.yml) - 專案級配置範例（多時區）
 - [serverless.yml](../serverless.yml) - Infrastructure as Code

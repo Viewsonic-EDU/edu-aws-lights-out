@@ -86,15 +86,15 @@ describe('triggerSourceDetector', () => {
         action: 'start',
         source: 'aws.events',
         'detail-type': 'Scheduled Event',
-        resources: ['arn:aws:events:ap-southeast-1:123456789012:rule/lights-out-sss-lab-start'],
+        resources: ['arn:aws:events:ap-southeast-1:123456789012:rule/lights-out-my-env-start'],
       };
 
       const result = await detectTriggerSource(event, mockContext);
 
       expect(result.type).toBe('eventbridge-scheduled');
-      expect(result.displayName).toBe('lights-out-sss-lab-start');
+      expect(result.displayName).toBe('lights-out-my-env-start');
       expect(result.identity).toBe(
-        'arn:aws:events:ap-southeast-1:123456789012:rule/lights-out-sss-lab-start'
+        'arn:aws:events:ap-southeast-1:123456789012:rule/lights-out-my-env-start'
       );
       expect(result.metadata?.eventDetailType).toBe('Scheduled Event');
     });

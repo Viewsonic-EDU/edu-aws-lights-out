@@ -1,0 +1,206 @@
+# =============================================================================
+# AWS Lights Out - AWS Account Level Configuration Example
+# =============================================================================
+# This example demonstrates configuration for a single AWS Account.
+# Use case: One AWS Account with a single lights-out project.
+#
+# Usage:
+# 1. Copy this file to config/<your-account>.yml
+# 2. Create corresponding scripts/arguments/<your-account>.json
+# 3. Modify the configuration below to match your requirements
+# =============================================================================
+
+version: '1.0'
+
+# -----------------------------------------------------------------------------
+# Environment Name
+# -----------------------------------------------------------------------------
+# Used to identify this configuration environment.
+# Displayed in notification messages and Lambda responses.
+environment: my-aws-account
+
+# -----------------------------------------------------------------------------
+# AWS Regions
+# -----------------------------------------------------------------------------
+# Lambda will scan these regions for resources with lights-out tags.
+# If omitted, defaults to the Lambda deployment region.
+regions:
+  - ap-southeast-1 # Singapore
+  - ap-northeast-1 # Tokyo
+
+# -----------------------------------------------------------------------------
+# Notifications Configuration
+# -----------------------------------------------------------------------------
+notifications:
+  teams:
+    enabled: true
+    # Power Automate Workflow URL (for sending notifications to Microsoft Teams)
+    webhook_url: >-
+      https://your-power-automate-workflow-url
+    description: Lights Out Notification for My AWS Account
+
+# -----------------------------------------------------------------------------
+# Resource Discovery Configuration
+# -----------------------------------------------------------------------------
+discovery:
+  method: tags # Currently only 'tags' method is supported
+
+  # Resources must have ALL these tags to be managed
+  tags:
+    lights-out:managed: 'true' # Required: marks resource as lights-out managed
+    lights-out:group: my-group # Optional: group identifier (for separating projects)
+
+  # Resource types to discover
+  # Supported types:
+  # - ecs:service                      ECS Service
+  # - rds:db                           RDS Instance
+  # - autoscaling:autoScalingGroup     EC2 Auto Scaling Group
+  resource_types:
+    - ecs:service
+    - rds:db
+    - autoscaling:autoScalingGroup
+
+# -----------------------------------------------------------------------------
+# Resource Default Configuration
+# -----------------------------------------------------------------------------
+# Each resource type can have different start/stop configurations
+resource_defaults:
+  # ---------------------------------------------------------------------------
+  # ECS Service - Direct Mode (without Application Auto Scaling)
+  # ---------------------------------------------------------------------------
+  # Use this mode when ECS Service does not have Application Auto Scaling configured.
+  # Only desiredCount needs to be set.
+  ecs-service:
+    waitForStable: true # Whether to wait for service to reach stable state
+    stableTimeoutSeconds: 300 # Timeout in seconds for waiting for stable state
+    start:
+      desiredCount: 1 # Target task count when starting
+    stop:
+      desiredCount: 0 # Set to 0 when stopping
+
+  # ---------------------------------------------------------------------------
+  # ECS Service - Auto Scaling Mode (with Application Auto Scaling)
+  # ---------------------------------------------------------------------------
+  # Use this mode when ECS Service has Application Auto Scaling configured.
+  # Requires minCapacity, maxCapacity, and desiredCount to be set together.
+  # Uncomment below to enable Auto Scaling Mode:
+  #
+  # ecs-service:
+  #   waitForStable: true
+  #   stableTimeoutSeconds: 300
+  #   start:
+  #     minCapacity: 2      # Auto Scaling minimum capacity
+  #     maxCapacity: 6      # Auto Scaling maximum capacity
+  #     desiredCount: 2     # Target task count when starting
+  #   stop:
+  #     minCapacity: 0
+  #     maxCapacity: 0
+  #     desiredCount: 0
+
+  # ---------------------------------------------------------------------------
+  # RDS Instance - Fire-and-Forget Mode
+  # ---------------------------------------------------------------------------
+  # RDS start/stop takes 5-10 minutes. Uses fire-and-forget mode to avoid Lambda timeout.
+  rds-db:
+    # Seconds to wait after sending command to confirm state transition has started
+    waitAfterCommand: 60
+
+    # Whether to skip creating snapshot when stopping
+    # - true:  Skip snapshot (recommended for dev/test environments to save storage costs)
+    # - false: Create snapshot before each stop (for environments requiring backups)
+    skipSnapshot: true
+
+  # ---------------------------------------------------------------------------
+  # EC2 Auto Scaling Group - Suspend Processes Mode
+  # ---------------------------------------------------------------------------
+  # ASG suspends Scaling Processes when stopping to prevent auto-scaling conflicts.
+  autoscaling-group:
+    # Whether to suspend Scaling Processes when stopping
+    suspendProcesses: true
+
+    # List of processes to suspend (default values)
+    processesToSuspend:
+      - Launch
+      - Terminate
+      - HealthCheck
+      - ReplaceUnhealthy
+      - AZRebalance
+      - ScheduledActions
+
+    # Seconds to wait after sending command
+    waitAfterCommand: 30
+
+    start:
+      minSize: 2 # ASG minimum instance count
+      maxSize: 10 # ASG maximum instance count
+      desiredCapacity: 2 # Target instance count when starting
+    stop:
+      minSize: 0
+      maxSize: 0
+      desiredCapacity: 0
+
+# -----------------------------------------------------------------------------
+# Schedule Configuration (Human-Readable Format)
+# -----------------------------------------------------------------------------
+# Used by Lambda at runtime to determine whether to start/stop resources.
+# This is a human-readable format; actual scheduling is controlled by schedules_cron.
+schedules:
+  default:
+    timezone: Asia/Taipei
+    startTime: '09:00' # Daily start time
+    stopTime: '19:00' # Daily stop time
+    activeDays: # Working days
+      - MON
+      - TUE
+      - WED
+      - THU
+      - FRI
+    holidays: [] # Holiday list (format: YYYY-MM-DD)
+    enabled: true # Whether schedule is enabled
+
+# -----------------------------------------------------------------------------
+# EventBridge Cron Schedule
+# -----------------------------------------------------------------------------
+# Cron expressions that actually control Lambda execution.
+# Format: minute hour day-of-month month day-of-week year (AWS EventBridge cron)
+# Note: EventBridge cron uses UTC timezone.
+schedules_cron:
+  start:
+    expression: 0 1 ? * MON-FRI * # 09:00 Asia/Taipei = 01:00 UTC
+    description: Start resources at 09:00 Asia/Taipei (01:00 UTC)
+    enabled: true
+  stop:
+    expression: 0 11 ? * MON-FRI * # 19:00 Asia/Taipei = 11:00 UTC
+    description: Stop resources at 19:00 Asia/Taipei (11:00 UTC)
+    enabled: true
+
+# =============================================================================
+# Resource Tag Examples
+# =============================================================================
+# Below are tag configuration examples for each resource type (using AWS CLI):
+#
+# ECS Service:
+#   aws ecs tag-resource \
+#     --resource-arn arn:aws:ecs:ap-southeast-1:123456789012:service/my-cluster/my-service \
+#     --tags Key=lights-out:managed,Value=true \
+#            Key=lights-out:group,Value=my-group \
+#            Key=lights-out:priority,Value=100
+#
+# RDS Instance:
+#   aws rds add-tags-to-resource \
+#     --resource-name arn:aws:rds:ap-southeast-1:123456789012:db:my-database \
+#     --tags Key=lights-out:managed,Value=true \
+#            Key=lights-out:group,Value=my-group \
+#            Key=lights-out:priority,Value=10
+#
+# EC2 Auto Scaling Group:
+#   aws autoscaling create-or-update-tags \
+#     --tags ResourceId=my-asg,ResourceType=auto-scaling-group,Key=lights-out:managed,Value=true,PropagateAtLaunch=false \
+#            ResourceId=my-asg,ResourceType=auto-scaling-group,Key=lights-out:group,Value=my-group,PropagateAtLaunch=false \
+#            ResourceId=my-asg,ResourceType=auto-scaling-group,Key=lights-out:priority,Value=50,PropagateAtLaunch=false
+#
+# Priority Guidelines (lower number = starts earlier, stops later):
+#   - RDS:  10  (Database is slowest, starts first)
+#   - ASG:  50  (Compute resources, starts in the middle)
+#   - ECS: 100  (May depend on RDS/ASG, starts last)
+# =============================================================================

@@ -147,8 +147,8 @@ function createUnknownSource(context: Context): TriggerSource {
 /**
  * Extract rule name from EventBridge rule ARN.
  *
- * @param arn - Rule ARN (e.g., "arn:aws:events:ap-southeast-1:123456:rule/lights-out-sss-lab-start")
- * @returns Rule name (e.g., "lights-out-sss-lab-start")
+ * @param arn - Rule ARN (e.g., "arn:aws:events:ap-southeast-1:123456:rule/lights-out-my-env-start")
+ * @returns Rule name (e.g., "lights-out-my-env-start")
  */
 function extractRuleNameFromArn(arn: string): string {
   const parts = arn.split('/');

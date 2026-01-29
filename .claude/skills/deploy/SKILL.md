@@ -43,7 +43,7 @@ disable-model-invocation: true
 pnpm deploy
 ```
 
-- 會引導選擇環境（sss-lab、pg-development、pg-stage）
+- 會引導選擇環境（從 scripts/arguments/ 中選擇）
 - 自動處理 AWS SSO credentials
 
 ### 直接部署

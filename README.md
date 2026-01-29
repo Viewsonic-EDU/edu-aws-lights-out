@@ -80,7 +80,8 @@ src/functions/handler/
 - **[docs/deployment-guide.md](./docs/deployment-guide.md)** - 部署指南
 - **[docs/roadmap.md](./docs/roadmap.md)** - 發展藍圖
 - **[docs/teams-integration.md](./docs/teams-integration.md)** - Teams 整合
-- **[config/sss-lab.yml](./config/sss-lab.yml)** - 配置範例
+- **[config/aws-account-example.yml](./config/aws-account-example.yml)** - Account 級配置範例
+- **[config/aws-account/project-example.yml](./config/aws-account/project-example.yml)** - 專案級配置範例（多時區）
 
 ## 專案狀態
 
