@@ -45,6 +45,12 @@ provider:
           Action:
             - sts:GetCallerIdentity
           Resource: '*'
+        # Lambda invoke permission for teams-outgoing-webhook
+        - Effect: Allow
+          Action:
+            - lambda:InvokeFunction
+          Resource:
+            Fn::Sub: 'arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:lights-out-${self:provider.stage}'
 
   environment:
     CONFIG_PARAMETER_NAME: /lights-out/${self:provider.stage}/config
@@ -63,6 +69,24 @@ functions:
     # Dynamic schedules generated from config file
     # Supports both legacy (schedules_cron) and regional (group_schedules) modes
     events: ${file(./scripts/generate-schedules.js):events}
+
+  teams-outgoing-webhook:
+    name: lights-out-${self:provider.stage}-teams-outgoing-webhook
+    handler: src/functions/teams-outgoing-webhook/index.main
+    runtime: nodejs24.x
+    timeout: 30
+    memorySize: 256
+    tags:
+      project: lights-out
+      managed-by: serverless
+    environment:
+      MAIN_HANDLER_FUNCTION_NAME: lights-out-${self:provider.stage}
+      STAGE: ${self:provider.stage}
+    events:
+      - http:
+          path: webhook/teams
+          method: post
+          cors: false
 
 custom:
   esbuild:
