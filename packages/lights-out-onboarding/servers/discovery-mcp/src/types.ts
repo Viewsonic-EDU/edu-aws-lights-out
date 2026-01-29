@@ -257,9 +257,9 @@ export type DiscoverRdsInput = z.infer<typeof DiscoverRdsInputSchema>;
 // ============================================================================
 
 /**
- * IaC file type
+ * IaC file type (extended for plugin system)
  */
-export type IacType = 'terraform' | 'terragrunt' | 'cloudformation';
+export type IacType = 'terraform' | 'terragrunt' | 'cloudformation' | 'serverless' | 'unknown';
 
 /**
  * IaC resource category
@@ -338,6 +338,8 @@ export interface IacScanSummary {
   terragrunt: number;
   /** Number of CloudFormation files */
   cloudformation: number;
+  /** Number of Serverless Framework files */
+  serverless?: number;
   /** Number of ECS resource definitions */
   ecsResources: number;
   /** Number of RDS resource definitions */
@@ -552,3 +554,436 @@ export const AnalyzeDependenciesInputSchema = z.object({
 });
 
 export type AnalyzeDependenciesInput = z.infer<typeof AnalyzeDependenciesInputSchema>;
+
+// ============================================================================
+// Apply Tags Types
+// ============================================================================
+
+/**
+ * Information about a discovery report file
+ */
+export interface DiscoveryReportInfo {
+  /** Absolute path to the report file */
+  path: string;
+  /** AWS account ID extracted from directory name */
+  accountId: string;
+  /** Report date extracted from filename (YYYYMMDD) */
+  date: string;
+  /** File name */
+  fileName: string;
+  /** File size in bytes */
+  size: number;
+  /** Last modified time */
+  modifiedAt: string;
+}
+
+/**
+ * Result of listing discovery reports
+ */
+export interface ListDiscoveryReportsResult {
+  success: boolean;
+  error?: string;
+  reports: DiscoveryReportInfo[];
+  summary: {
+    totalReports: number;
+    accounts: string[];
+  };
+}
+
+/**
+ * Lights Out tags to apply
+ */
+export interface LightsOutTags {
+  /** Whether the resource is managed by Lights Out */
+  'lights-out:managed': 'true' | 'false';
+  /** Project name (extracted from common service name prefix) */
+  'lights-out:project': string;
+  /** Priority for startup/shutdown order (lower = earlier) */
+  'lights-out:priority': string;
+}
+
+/**
+ * Resource classification for tag application
+ */
+export type ResourceClassification = 'autoApply' | 'needConfirmation' | 'excluded';
+
+/**
+ * ECS resource extracted from report
+ */
+export interface ParsedEcsResource {
+  region: string;
+  cluster: string;
+  serviceName: string;
+  arn: string;
+  status: string;
+  hasAutoScaling: boolean;
+  autoScalingRange?: string;
+  riskLevel: RiskLevel;
+  lightsOutSupport: 'supported' | 'caution' | 'not-supported';
+  classification: ResourceClassification;
+  classificationReason: string;
+  suggestedTags: LightsOutTags;
+}
+
+/**
+ * RDS resource extracted from report
+ */
+export interface ParsedRdsResource {
+  region: string;
+  instanceId: string;
+  arn: string;
+  engine: string;
+  status: string;
+  instanceType: string;
+  lightsOutSupport: 'supported' | 'cluster-managed' | 'not-supported';
+  classification: ResourceClassification;
+  classificationReason: string;
+  suggestedTags?: LightsOutTags;
+}
+
+/**
+ * Result of parsing a discovery report
+ */
+export interface ParseDiscoveryReportResult {
+  success: boolean;
+  error?: string;
+  reportPath: string;
+  accountId: string;
+  regions: string[];
+  /** Detected project name from cluster name, or null if not detected (user should be asked) */
+  detectedProject: string | null;
+  ecsResources: ParsedEcsResource[];
+  rdsResources: ParsedRdsResource[];
+  summary: {
+    totalEcs: number;
+    totalRds: number;
+    autoApply: number;
+    needConfirmation: number;
+    excluded: number;
+  };
+  categorized: {
+    autoApply: (ParsedEcsResource | ParsedRdsResource)[];
+    needConfirmation: (ParsedEcsResource | ParsedRdsResource)[];
+    excluded: (ParsedEcsResource | ParsedRdsResource)[];
+  };
+}
+
+/**
+ * Resource to apply tags to
+ */
+export interface ResourceToTag {
+  /** Resource ARN */
+  arn: string;
+  /** Resource type */
+  type: 'ecs-service' | 'rds-db';
+  /** Tags to apply */
+  tags: LightsOutTags;
+}
+
+/**
+ * Result of applying tags to a single resource
+ */
+export interface TagApplicationResult {
+  arn: string;
+  type: 'ecs-service' | 'rds-db';
+  status: 'success' | 'failed' | 'skipped';
+  error?: string;
+  appliedTags?: LightsOutTags;
+}
+
+/**
+ * Result of applying tags via API
+ */
+export interface ApplyTagsResult {
+  success: boolean;
+  dryRun: boolean;
+  results: TagApplicationResult[];
+  summary: {
+    total: number;
+    succeeded: number;
+    failed: number;
+    skipped: number;
+  };
+}
+
+/**
+ * Result of verifying tags on a single resource
+ */
+export interface TagVerificationResult {
+  arn: string;
+  type: 'ecs-service' | 'rds-db';
+  status: 'verified' | 'mismatch' | 'not-found' | 'error';
+  expectedTags: LightsOutTags;
+  actualTags?: Record<string, string>;
+  mismatches?: string[];
+  error?: string;
+}
+
+/**
+ * Result of verifying tags
+ */
+export interface VerifyTagsResult {
+  success: boolean;
+  results: TagVerificationResult[];
+  summary: {
+    total: number;
+    verified: number;
+    mismatch: number;
+    notFound: number;
+    error: number;
+  };
+}
+
+/**
+ * IaC file modification suggestion
+ */
+export interface IacTagPatch {
+  /** Path to the IaC file */
+  filePath: string;
+  /** IaC type */
+  iacType: 'terraform' | 'cloudformation' | 'serverless' | 'terragrunt';
+  /** Resource identifier in the file */
+  resourceIdentifier: string;
+  /** Current tags (if any) */
+  currentTags?: Record<string, string>;
+  /** Suggested tags to add/modify */
+  suggestedTags: LightsOutTags;
+  /** Line number where tags should be added (approximate) */
+  lineNumber?: number;
+  /** Code snippet showing the modification */
+  patchSnippet?: string;
+  /** Human-readable instructions */
+  instructions: string;
+}
+
+/**
+ * Result of generating IaC tag patches
+ */
+export interface GenerateIacTagPatchResult {
+  success: boolean;
+  error?: string;
+  iacDirectory: string;
+  patches: IacTagPatch[];
+  summary: {
+    totalPatches: number;
+    terraform: number;
+    cloudformation: number;
+    serverless: number;
+    terragrunt: number;
+    notFound: number;
+  };
+  notFoundResources: string[];
+}
+
+// Input schemas for new tools
+
+export const ListDiscoveryReportsInputSchema = z.object({
+  accountId: z.string().optional().describe('Filter by AWS account ID (optional)'),
+  directory: z
+    .string()
+    .optional()
+    .describe('Custom reports directory (optional, defaults to ./reports)'),
+});
+
+export const ParseDiscoveryReportInputSchema = z.object({
+  reportPath: z.string().describe('Path to the discovery report file'),
+});
+
+export const ApplyTagsViaApiInputSchema = z.object({
+  resources: z
+    .array(
+      z.object({
+        arn: z.string(),
+        type: z.enum(['ecs-service', 'rds-db']),
+        tags: z.object({
+          'lights-out:managed': z.enum(['true', 'false']),
+          'lights-out:project': z.string(),
+          'lights-out:priority': z.string(),
+        }),
+      })
+    )
+    .min(1)
+    .describe('Resources to tag'),
+  dryRun: z.boolean().optional().default(false).describe('Preview mode (no actual changes)'),
+  profile: z.string().optional().describe('AWS profile name (optional)'),
+});
+
+export const VerifyTagsInputSchema = z.object({
+  resources: z
+    .array(
+      z.object({
+        arn: z.string(),
+        type: z.enum(['ecs-service', 'rds-db']),
+        expectedTags: z.object({
+          'lights-out:managed': z.enum(['true', 'false']),
+          'lights-out:project': z.string(),
+          'lights-out:priority': z.string(),
+        }),
+      })
+    )
+    .min(1)
+    .describe('Resources to verify'),
+  profile: z.string().optional().describe('AWS profile name (optional)'),
+});
+
+export const GenerateIacTagPatchInputSchema = z.object({
+  iacDirectory: z.string().describe('Path to the IaC project directory'),
+  resources: z
+    .array(
+      z.object({
+        arn: z.string(),
+        type: z.enum(['ecs-service', 'rds-db']),
+        tags: z.object({
+          'lights-out:managed': z.enum(['true', 'false']),
+          'lights-out:project': z.string(),
+          'lights-out:priority': z.string(),
+        }),
+      })
+    )
+    .min(1)
+    .describe('Resources to generate patches for'),
+  outputFormat: z
+    .enum(['patch', 'instructions'])
+    .optional()
+    .default('instructions')
+    .describe('Output format'),
+});
+
+export type ListDiscoveryReportsInput = z.infer<typeof ListDiscoveryReportsInputSchema>;
+export type ParseDiscoveryReportInput = z.infer<typeof ParseDiscoveryReportInputSchema>;
+export type ApplyTagsViaApiInput = z.infer<typeof ApplyTagsViaApiInputSchema>;
+export type VerifyTagsInput = z.infer<typeof VerifyTagsInputSchema>;
+export type GenerateIacTagPatchInput = z.infer<typeof GenerateIacTagPatchInputSchema>;
+
+// ============================================================================
+// IaC Plugin System Types
+// ============================================================================
+
+// Note: IacType is already defined in IaC Scanning Types section above
+// Extended to include 'serverless' and 'unknown' for plugin system
+
+/**
+ * Result of IaC type detection
+ */
+export interface IacDetectionResult {
+  /** Whether this plugin can handle the directory */
+  detected: boolean;
+  /** Confidence level of detection */
+  confidence: 'high' | 'medium' | 'low';
+  /** IaC type identifier */
+  iacType: IacType;
+  /** Additional metadata about the detected structure */
+  metadata?: {
+    /** Files that were detected */
+    detectedFiles?: string[];
+    /** Version or variant information */
+    version?: string;
+    /** Any special configuration detected */
+    config?: Record<string, unknown>;
+  };
+}
+
+/**
+ * A matched resource location in IaC files
+ */
+export interface IacResourceMatch {
+  /** Path to the IaC file */
+  filePath: string;
+  /** Line number where the resource is defined */
+  lineNumber: number;
+  /** Resource identifier in the IaC (e.g., resource name, logical ID) */
+  resourceIdentifier: string;
+  /** Code context around the resource definition */
+  context: string;
+  /** End line number of the resource block (optional) */
+  endLineNumber?: number;
+}
+
+/**
+ * Interface for IaC plugins
+ */
+export interface IacPlugin {
+  /** Plugin name for identification */
+  readonly name: string;
+
+  /** IaC type this plugin handles */
+  readonly iacType: IacType;
+
+  /**
+   * Detect if this plugin can handle the given directory
+   * @param directory - Path to the IaC directory
+   * @returns Detection result with confidence level
+   */
+  detect(directory: string): Promise<IacDetectionResult>;
+
+  /**
+   * Find the IaC definition for a given AWS resource
+   * @param directory - Path to the IaC directory
+   * @param resourceArn - AWS ARN of the resource
+   * @param resourceType - Type of the resource
+   * @returns Matched resource location or null if not found
+   */
+  findResource(
+    directory: string,
+    resourceArn: string,
+    resourceType: 'ecs-service' | 'rds-db'
+  ): Promise<IacResourceMatch | null>;
+
+  /**
+   * Generate tag patch instructions for a matched resource
+   * @param match - The matched resource location
+   * @param tags - Tags to apply
+   * @returns IaC tag patch with instructions
+   */
+  generatePatch(match: IacResourceMatch, tags: LightsOutTags): IacTagPatch;
+}
+
+/**
+ * Directory structure for AI analysis fallback
+ */
+export interface DirectoryStructure {
+  /** Directory path */
+  path: string;
+  /** Whether this is a directory */
+  isDirectory: boolean;
+  /** Children (if directory) */
+  children?: DirectoryStructure[];
+}
+
+/**
+ * Sample file content for AI analysis
+ */
+export interface SampleFile {
+  /** File path relative to IaC directory */
+  relativePath: string;
+  /** File content (truncated if too long) */
+  content: string;
+  /** Whether content was truncated */
+  truncated: boolean;
+  /** Detected file type */
+  fileType: string;
+}
+
+/**
+ * AI analysis context when no plugin matches
+ */
+export interface AiAnalysisContext {
+  /** Directory structure tree */
+  directoryStructure: DirectoryStructure;
+  /** Sample files for analysis */
+  sampleFiles: SampleFile[];
+  /** Resources that need tag patches */
+  resources: ResourceToTag[];
+  /** Any hints about the IaC structure */
+  hints?: string[];
+}
+
+/**
+ * Extended result for generate IaC tag patch with AI fallback support
+ */
+export interface GenerateIacTagPatchResultWithAiFallback extends GenerateIacTagPatchResult {
+  /** Whether AI analysis is required (no plugin matched) */
+  requiresAiAnalysis?: boolean;
+  /** Context for AI analysis (only present if requiresAiAnalysis is true) */
+  aiAnalysisContext?: AiAnalysisContext;
+}
