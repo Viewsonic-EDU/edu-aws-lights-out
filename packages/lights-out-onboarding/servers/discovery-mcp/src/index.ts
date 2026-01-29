@@ -18,26 +18,22 @@ import { verifyCredentials } from './tools/verifyCredentials.js';
 import { discoverEcsServices } from './tools/discoverEcs.js';
 import { discoverRdsInstances } from './tools/discoverRds.js';
 import { listAvailableRegions } from './tools/listRegions.js';
-import { scanIacDirectory } from './tools/scanIacDirectory.js';
 import { scanBackendProject } from './tools/scanBackendProject.js';
 import { analyzeDependencies } from './tools/analyzeDependencies.js';
 import { listDiscoveryReports } from './tools/listDiscoveryReports.js';
 import { parseDiscoveryReport } from './tools/parseDiscoveryReport.js';
 import { applyTagsViaApi } from './tools/applyTagsViaApi.js';
 import { verifyTags } from './tools/verifyTags.js';
-import { generateIacTagPatch } from './tools/generateIacTagPatch.js';
 import {
   VerifyCredentialsInputSchema,
   DiscoverEcsInputSchema,
   DiscoverRdsInputSchema,
-  ScanIacDirectoryInputSchema,
   ScanBackendProjectInputSchema,
   AnalyzeDependenciesInputSchema,
   ListDiscoveryReportsInputSchema,
   ParseDiscoveryReportInputSchema,
   ApplyTagsViaApiInputSchema,
   VerifyTagsInputSchema,
-  GenerateIacTagPatchInputSchema,
 } from './types.js';
 
 const server = new Server(
@@ -111,26 +107,6 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
         },
       },
       {
-        name: 'scan_iac_directory',
-        description:
-          'Scan a directory for Infrastructure as Code files (Terraform, CloudFormation, Terragrunt) and extract ECS/RDS resource definitions to provide context for analysis',
-        inputSchema: {
-          type: 'object',
-          properties: {
-            directory: {
-              type: 'string',
-              description: 'Path to the IaC project directory to scan',
-            },
-            includeSnippets: {
-              type: 'boolean',
-              description:
-                'Whether to include code snippets around resource definitions (default: false)',
-            },
-          },
-          required: ['directory'],
-        },
-      },
-      {
         name: 'scan_backend_project',
         description:
           'Scan a backend project directory for HTTP calls, environment variable usage, and infer service dependencies. Supports TypeScript/JavaScript, Python, and Go projects.',
@@ -160,10 +136,6 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
             ecsServices: {
               type: 'array',
               description: 'ECS services from discover_ecs_services result',
-            },
-            iacScanResult: {
-              type: 'object',
-              description: 'Result from scan_iac_directory',
             },
             backendAnalysis: {
               type: 'array',
@@ -277,45 +249,6 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
           required: ['resources'],
         },
       },
-      {
-        name: 'generate_iac_tag_patch',
-        description:
-          'Generate IaC (Terraform, CloudFormation, Serverless) modification suggestions for adding Lights Out tags to resources',
-        inputSchema: {
-          type: 'object',
-          properties: {
-            iacDirectory: {
-              type: 'string',
-              description: 'Path to the IaC project directory',
-            },
-            resources: {
-              type: 'array',
-              description: 'Resources to generate patches for',
-              items: {
-                type: 'object',
-                properties: {
-                  arn: { type: 'string' },
-                  type: { type: 'string', enum: ['ecs-service', 'rds-db'] },
-                  tags: {
-                    type: 'object',
-                    properties: {
-                      'lights-out:managed': { type: 'string' },
-                      'lights-out:project': { type: 'string' },
-                      'lights-out:priority': { type: 'string' },
-                    },
-                  },
-                },
-              },
-            },
-            outputFormat: {
-              type: 'string',
-              enum: ['patch', 'instructions'],
-              description: 'Output format (default: instructions)',
-            },
-          },
-          required: ['iacDirectory', 'resources'],
-        },
-      },
     ],
   };
 });
@@ -367,19 +300,6 @@ server.setRequestHandler(CallToolRequestSchema, async (request): Promise<CallToo
       case 'discover_rds_instances': {
         const input = DiscoverRdsInputSchema.parse(args);
         const result = await discoverRdsInstances(input);
-        return {
-          content: [
-            {
-              type: 'text',
-              text: JSON.stringify(result, null, 2),
-            },
-          ],
-        };
-      }
-
-      case 'scan_iac_directory': {
-        const input = ScanIacDirectoryInputSchema.parse(args);
-        const result = await scanIacDirectory(input);
         return {
           content: [
             {
@@ -459,19 +379,6 @@ server.setRequestHandler(CallToolRequestSchema, async (request): Promise<CallToo
       case 'verify_tags': {
         const input = VerifyTagsInputSchema.parse(args);
         const result = await verifyTags(input);
-        return {
-          content: [
-            {
-              type: 'text',
-              text: JSON.stringify(result, null, 2),
-            },
-          ],
-        };
-      }
-
-      case 'generate_iac_tag_patch': {
-        const input = GenerateIacTagPatchInputSchema.parse(args);
-        const result = await generateIacTagPatch(input);
         return {
           content: [
             {
