@@ -12,7 +12,7 @@
 - [x] Phase 1.1: Python 原型實作（已移除）
 - [x] Phase 1.2: TypeScript 完整實作（完成）
 - [x] Phase 1.2.1: 移除 Python 實作，統一使用 TypeScript
-- [x] Phase 1.3: AWS 環境設定與部署（sss-lab account - 完成）
+- [x] Phase 1.3: AWS 環境設定與部署（完成）
 - [x] Phase 1.4: 排程與驗證（EventBridge + 手動觸發 - 完成）
 - [ ] Phase 2: 更多資源類型支援
 - [ ] Phase 3: MCP 整合
@@ -31,7 +31,7 @@
 | Phase 1 範圍 | ECS + RDS               | 涵蓋常用資源類型             | 2025-12-23 |
 | Python 移除  | 2025-12-24              | 統一使用 TypeScript          | 2025-12-24 |
 | 實作方式     | TDD + TypeScript Strict | 確保程式碼品質與型別安全     | 2025-12-23 |
-| 首次部署     | sss-lab account         | PoC 環境驗證                 | 2025-12-29 |
+| 首次部署     | pg-development account  | PoC 環境驗證                 | 2025-12-29 |
 | 排程時間     | 09:00-19:00 TPE         | 週一至五工作時間             | 2025-12-29 |
 
 ### Blockers
@@ -82,10 +82,10 @@ Python 原型實作已完成階段性任務並移除，專案統一使用 TypeSc
 | ---- | ------------------ | ------ | ---------- | ------------------------------------- |
 | D-01 | 建立 IAM Role      | ✅     | Serverless | 自動建立（含 ECS + RDS + SSM 權限）   |
 | D-02 | 建立 SSM Parameter | ✅     | DevOps     | /lights-out/config（手動創建）        |
-| D-03 | 為資源加標籤       | ✅     | DevOps     | sss-lab 資源已標記 lights-out:\* tags |
+| D-03 | 為資源加標籤       | ✅     | DevOps     | 資源已標記 lights-out:\* tags         |
 | D-04 | 部署 Lambda        | ✅     | DevOps     | Serverless Framework v3.39.0 部署成功 |
 | D-05 | 建立 EventBridge   | ✅     | Serverless | start/stop cron rules 已建立          |
-| D-06 | sss-lab 驗證       | ✅     | DevOps     | 端對端測試（手動 + 排程觸發）全部通過 |
+| D-06 | 端對端驗證         | ✅     | DevOps     | 端對端測試（手動 + 排程觸發）全部通過 |
 
 **Status:** 🔲 Todo | 🔄 In Progress | ✅ Done | ⏸️ Blocked
 
@@ -103,7 +103,7 @@ Python 原型實作已完成階段性任務並移除，專案統一使用 TypeSc
 
 ```yaml
 version: '1.0'
-environment: sss-lab
+environment: my-environment
 
 # Optional: List of AWS regions to scan for resources
 # If omitted, defaults to Lambda's deployment region
@@ -113,23 +113,36 @@ regions:
 
 discovery:
   method: tags
-  tagFilters:
+  tags:
     lights-out:managed: 'true'
-    lights-out:env: sss-lab
-  resourceTypes:
-    - ecs-service
-    - rds-db
+    lights-out:group: my-group
+  resource_types:
+    - ecs:service
+    - rds:db
+    - autoscaling:autoScalingGroup
 
-resourceDefaults:
+resource_defaults:
   ecs-service:
     waitForStable: true
     stableTimeoutSeconds: 300
-    defaultDesiredCount: 1
+    start:
+      desiredCount: 1
+    stop:
+      desiredCount: 0
   rds-db:
-    skipFinalSnapshot: true
-    waitTimeout: 600
-
-overrides: {}
+    waitAfterCommand: 60
+    skipSnapshot: true
+  autoscaling-group:
+    suspendProcesses: true
+    waitAfterCommand: 30
+    start:
+      minSize: 2
+      maxSize: 10
+      desiredCapacity: 2
+    stop:
+      minSize: 0
+      maxSize: 0
+      desiredCapacity: 0
 
 schedules:
   default:
@@ -143,6 +156,9 @@ schedules:
       - THU
       - FRI
     holidays: []
+    enabled: true
+
+# See config/aws-account-example.yml for full configuration reference
 ```
 
 ### Interface Definitions

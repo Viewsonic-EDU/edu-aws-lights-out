@@ -1,0 +1,233 @@
+# =============================================================================
+# AWS Lights Out - Project Level Configuration Example (Multi-Region Scheduling)
+# =============================================================================
+# This example demonstrates project-level configuration with multi-timezone scheduling.
+# Use case: One AWS Account with multiple projects, resources distributed across
+# different timezone regions.
+#
+# Directory Structure Example:
+#   config/
+#   ├── aws-account-example.yml              # Account-level example
+#   └── my-aws-account/                      # Multi-project config for specific AWS Account
+#       ├── project-a.yml                    # Project A
+#       └── project-b.yml                    # Project B
+#
+# Usage:
+# 1. Create config/<aws-account>/ directory
+# 2. Copy this file to config/<aws-account>/<project>.yml
+# 3. Create corresponding scripts/arguments/<project>.json
+# 4. Modify the configuration below to match your requirements
+# =============================================================================
+
+version: '1.0'
+
+# -----------------------------------------------------------------------------
+# Environment Name
+# -----------------------------------------------------------------------------
+# Recommended format: <aws-account>-<project>
+# This name is displayed in notification messages and Lambda responses.
+environment: my-aws-account-project-example
+
+# -----------------------------------------------------------------------------
+# Region Groups (Multi-Timezone Support)
+# -----------------------------------------------------------------------------
+# Group regions together; each group can have its own schedule.
+# Suitable for globally distributed applications across different timezones.
+region_groups:
+  asia:
+    - ap-southeast-1 # Singapore
+    - ap-northeast-1 # Tokyo
+  america:
+    - us-east-1 # N. Virginia
+    - us-west-2 # Oregon
+  europe:
+    - eu-west-1 # Ireland
+    - eu-central-1 # Frankfurt
+
+# -----------------------------------------------------------------------------
+# Group Schedules (Schedule for Each Region Group)
+# -----------------------------------------------------------------------------
+# Human-readable format; actual scheduling is controlled by group_schedules_cron.
+group_schedules:
+  asia:
+    timezone: Asia/Taipei
+    startTime: '08:00'
+    stopTime: '22:00'
+    activeDays:
+      - MON
+      - TUE
+      - WED
+      - THU
+      - FRI
+    holidays: []
+    enabled: true
+
+  america:
+    timezone: America/New_York
+    startTime: '08:00'
+    stopTime: '18:00'
+    activeDays:
+      - MON
+      - TUE
+      - WED
+      - THU
+      - FRI
+    holidays:
+      - '2026-07-04' # Independence Day
+      - '2026-11-26' # Thanksgiving
+    enabled: true
+
+  europe:
+    timezone: Europe/London
+    startTime: '09:00'
+    stopTime: '18:00'
+    activeDays:
+      - MON
+      - TUE
+      - WED
+      - THU
+      - FRI
+    holidays: []
+    enabled: true
+
+# -----------------------------------------------------------------------------
+# Notifications Configuration
+# -----------------------------------------------------------------------------
+notifications:
+  teams:
+    enabled: true
+    webhook_url: >-
+      https://your-power-automate-workflow-url
+    description: Lights Out Notification for Project Example
+
+# -----------------------------------------------------------------------------
+# Resource Discovery Configuration
+# -----------------------------------------------------------------------------
+discovery:
+  method: tags
+
+  # Use project tag to distinguish different projects within the same AWS Account
+  tags:
+    lights-out:managed: 'true'
+    lights-out:project: project-example # Project identifier
+
+  resource_types:
+    - ecs:service
+    - rds:db
+    - autoscaling:autoScalingGroup
+
+# -----------------------------------------------------------------------------
+# Resource Default Configuration
+# -----------------------------------------------------------------------------
+resource_defaults:
+  # ECS Service with Auto Scaling
+  ecs-service:
+    waitForStable: true
+    stableTimeoutSeconds: 300
+    start:
+      minCapacity: 2
+      maxCapacity: 6
+      desiredCount: 2
+    stop:
+      # Stage environments can set non-zero values to maintain minimum service
+      minCapacity: 1
+      maxCapacity: 2
+      desiredCount: 1
+
+  # RDS Instance
+  rds-db:
+    waitAfterCommand: 60
+    skipSnapshot: true
+
+  # EC2 Auto Scaling Group
+  autoscaling-group:
+    suspendProcesses: true
+    processesToSuspend:
+      - Launch
+      - Terminate
+      - HealthCheck
+      - ReplaceUnhealthy
+      - AZRebalance
+      - ScheduledActions
+    waitAfterCommand: 30
+    start:
+      minSize: 2
+      maxSize: 10
+      desiredCapacity: 2
+    stop:
+      minSize: 0
+      maxSize: 0
+      desiredCapacity: 0
+
+# -----------------------------------------------------------------------------
+# Group Schedules Cron (EventBridge Cron for Each Region Group)
+# -----------------------------------------------------------------------------
+# Each region group has independent start/stop cron expressions.
+# Note: EventBridge cron uses UTC timezone.
+group_schedules_cron:
+  asia:
+    start:
+      expression: 0 0 ? * MON-FRI * # 08:00 Asia/Taipei = 00:00 UTC
+      description: Start asia resources at 08:00 Asia/Taipei (00:00 UTC)
+      enabled: true
+    stop:
+      expression: 0 14 ? * MON-FRI * # 22:00 Asia/Taipei = 14:00 UTC
+      description: Stop asia resources at 22:00 Asia/Taipei (14:00 UTC)
+      enabled: true
+
+  america:
+    start:
+      expression: 0 13 ? * MON-FRI * # 08:00 America/New_York = 13:00 UTC (EST)
+      description: Start america resources at 08:00 America/New_York (13:00 UTC)
+      enabled: true
+    stop:
+      expression: 0 23 ? * MON-FRI * # 18:00 America/New_York = 23:00 UTC (EST)
+      description: Stop america resources at 18:00 America/New_York (23:00 UTC)
+      enabled: true
+
+  europe:
+    start:
+      expression: 0 9 ? * MON-FRI * # 09:00 Europe/London = 09:00 UTC (GMT)
+      description: Start europe resources at 09:00 Europe/London (09:00 UTC)
+      enabled: true
+    stop:
+      expression: 0 18 ? * MON-FRI * # 18:00 Europe/London = 18:00 UTC (GMT)
+      description: Stop europe resources at 18:00 Europe/London (18:00 UTC)
+      enabled: true
+
+# =============================================================================
+# Corresponding scripts/arguments/project-example.json Example
+# =============================================================================
+# {
+#   "scope": "project",
+#   "region": "ap-southeast-1",
+#   "stage": "my-aws-account-project-example",
+#   "profile": "my-aws-account",
+#   "function-name": "lights-out-my-aws-account-project-example",
+#   "config": {
+#     "name": "/lights-out/my-aws-account-project-example/config",
+#     "path": "config/aws-account/project-example.yml",
+#     "description": "Lights Out configuration for project-example"
+#   }
+# }
+# =============================================================================
+
+# =============================================================================
+# Timezone Conversion Reference
+# =============================================================================
+# Asia/Taipei (UTC+8):
+#   08:00 TPE = 00:00 UTC
+#   22:00 TPE = 14:00 UTC
+#
+# America/New_York (UTC-5 EST / UTC-4 EDT):
+#   08:00 EST = 13:00 UTC (Standard Time / Winter)
+#   08:00 EDT = 12:00 UTC (Daylight Saving Time / Summer)
+#   18:00 EST = 23:00 UTC
+#   18:00 EDT = 22:00 UTC
+#
+# Europe/London (UTC+0 GMT / UTC+1 BST):
+#   09:00 GMT = 09:00 UTC (Standard Time / Winter)
+#   09:00 BST = 08:00 UTC (British Summer Time)
+#
+# Recommended tool for timezone conversion: https://www.worldtimebuddy.com/
+# =============================================================================

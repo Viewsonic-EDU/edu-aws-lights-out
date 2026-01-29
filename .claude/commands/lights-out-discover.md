@@ -512,7 +512,7 @@ aws rds add-tags-to-resource \
 
 ```bash
 # 建立配置檔案
-cp config/sss-lab.yml config/{stage_name}.yml
+cp config/aws-account-example.yml config/{stage_name}.yml
 
 # 編輯配置（參考上方建議配置）
 # 然後使用 run-interactive.js 部署時會自動上傳

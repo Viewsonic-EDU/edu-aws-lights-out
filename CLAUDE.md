@@ -316,5 +316,6 @@ aws lambda invoke \
 - [AGENTS.md](./AGENTS.md) — 多 Agent 協作 + 技術規格
 - [TASKS.md](./TASKS.md) — 任務追蹤
 - [docs/deployment-guide.md](./docs/deployment-guide.md) — 完整部署與操作手冊
-- [config/sss-lab.yml](./config/sss-lab.yml) — 配置範例（含詳細註解）
+- [config/aws-account-example.yml](./config/aws-account-example.yml) — Account 級配置範例
+- [config/aws-account/project-example.yml](./config/aws-account/project-example.yml) — 專案級配置範例（多時區）
 - [serverless.yml](./serverless.yml) — Infrastructure as Code

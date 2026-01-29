@@ -37,7 +37,7 @@ export interface TriggerSource {
 
   /**
    * Human-readable display name.
-   * - EventBridge: Rule name (e.g., "lights-out-sss-lab-start")
+   * - EventBridge: Rule name (e.g., "lights-out-my-env-start")
    * - Manual: IAM username or role name
    * - Teams Bot: "@username"
    */
