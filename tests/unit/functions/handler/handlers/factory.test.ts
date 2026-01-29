@@ -8,6 +8,7 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import { getHandler } from '@functions/handler/handlers/factory';
 import { ECSServiceHandler } from '@functions/handler/handlers/ecsService';
 import { RDSInstanceHandler } from '@functions/handler/handlers/rdsInstance';
+import { ASGGroupHandler } from '@functions/handler/handlers/asgGroup';
 import type { Config, DiscoveredResource } from '@shared/types';
 
 describe('Handler Factory', () => {
@@ -65,6 +66,23 @@ describe('Handler Factory', () => {
 
       expect(handler).toBeDefined();
       expect(handler).toBeInstanceOf(RDSInstanceHandler);
+    });
+
+    it('should return ASGGroupHandler for autoscaling-group resource type', () => {
+      const resource: DiscoveredResource = {
+        resourceType: 'autoscaling-group',
+        arn: 'arn:aws:autoscaling:us-east-1:123456:autoScalingGroup:12345:autoScalingGroupName/my-asg',
+        resourceId: 'my-asg',
+        priority: 50,
+        group: 'default',
+        tags: {},
+        metadata: {},
+      };
+
+      const handler = getHandler('autoscaling-group', resource, sampleConfig);
+
+      expect(handler).toBeDefined();
+      expect(handler).toBeInstanceOf(ASGGroupHandler);
     });
 
     it('should return null for unknown resource type', () => {
